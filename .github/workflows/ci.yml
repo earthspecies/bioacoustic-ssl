@@ -1,0 +1,126 @@
+# CI for ESP projects. There are two jobs: one on GitHub-hosted runners and one
+# on ESP's self-hosted GKE runners. The self-hosted job is recommended if your
+# project needs access to Google Cloud (private pypi, GCS, etc.).
+
+# TODO (OSS): change my_dummy_library to dir name of your own library
+
+name: CI
+
+on: # yamllint disable-line rule:truthy
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Runs on GitHub-hosted runners. If your CI needs access to Google Cloud
+  # (e.g. private pypi, GCS buckets), prefer the self-hosted job below which
+  # runs on GKE and inherits GCP credentials automatically. It is also
+  # possible to authenticate from GitHub-hosted runners using workload
+  # identity federation — see the commented-out steps below.
+  tests-github-hosted:
+    name: Tests (GitHub-Hosted)
+    runs-on: ubuntu-latest
+    # TODO (OSS): Uncomment if you require Google Cloud authentication
+    # permissions:
+    #     contents: read
+    #     id-token: write
+    steps:
+      - uses: actions/checkout@v2
+
+      # TODO (OSS): Uncomment if your workflow requires access to Google
+      # Cloud for example for accessing data from buckets, installing
+      # packages from private pypi repo etc. You'd also have to contact
+      # the engineering team so that secrets below can be added to your
+      # repo.
+      # yamllint disable rule:line-length
+      # - name: Authenticate to Google Cloud
+      #   uses: "google-github-actions/auth@v2"
+      #   with:
+      #       workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER_ID }}
+      #       service_account: ${{ secrets.GH_ACTIONS_SA }}
+      # yamllint enable rule:line-length
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install dependencies
+        run: |
+          # TODO (OSS) uncomment if you have dependencies on ESP's private pypi
+          # repository
+          # uv tool install keyring \
+          #   --with keyrings.google-artifactregistry-auth
+
+          uv sync
+
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
+      - name: Checking dependencies
+        run: |
+          uv run deptry .
+      - name: Consistency tests with pytest
+        run: |
+          uv run pytest tests/consistency --base_folder my_dummy_library
+      - name: Unittests with pytest
+        run: |
+          uv run pytest tests/unittests
+      - name: Doctests with pytest
+        run: |
+          uv run pytest --doctest-modules my_dummy_library
+      - name: Integration tests with pytest
+        run: |
+          uv run pytest tests/integration
+
+  # Runs on ESP's self-hosted runners on GKE. GCP credentials are available
+  # automatically via the node's service account — no workload identity
+  # federation or secrets needed.
+  tests-self-hosted:
+    name: Tests (Self-Hosted)
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install dependencies
+        run: |
+          # TODO (OSS) uncomment if you have dependencies on ESP's private pypi
+          # repository
+          # uv tool install keyring \
+          #   --with keyrings.google-artifactregistry-auth
+
+          uv sync
+
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
+      - name: Checking dependencies
+        run: |
+          uv run deptry .
+      - name: Consistency tests with pytest
+        run: |
+          uv run pytest tests/consistency --base_folder my_dummy_library
+      - name: Unittests with pytest
+        run: |
+          uv run pytest tests/unittests
+      - name: Doctests with pytest
+        run: |
+          uv run pytest --doctest-modules my_dummy_library
+      - name: Integration tests with pytest
+        run: |
+          uv run pytest tests/integration

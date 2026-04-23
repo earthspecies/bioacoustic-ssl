@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+.Python
+env/
+venv/
+pip-wheel-metadata/
+.pytest_cache/
+.ipynb_checkpoints
+.mypy_cache/
+.vscode/
+
+# PyTorch
+runs/
+tb_logs/
+lightning_logs/
+checkpoints/
+*.pt
+*.pth
+*.safetensors
+saved_models/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+.Trashes
+Thumbs.db
