@@ -1,0 +1,6 @@
+# @package module.metrics.auroc
+
+_target_: torchmetrics.classification.MultilabelAUROC
+num_labels: ${data.num_classes}
+average: "macro"
+_stage_: ["test"]

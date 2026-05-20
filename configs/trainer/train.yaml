@@ -1,0 +1,10 @@
+accelerator: gpu
+devices: 1
+strategy: auto
+precision: bf16-mixed
+epochs: 20 # ~ 50 epochs on XCL
+grad_clip: 1.0
+log_every_n_steps: 100
+save_every_n_steps: 50000
+resume_from_checkpoint: null
+checkpoint: null

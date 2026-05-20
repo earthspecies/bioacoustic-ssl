@@ -1,0 +1,7 @@
+# @package data.datasets.a2o
+
+_target_: soundscape_ssl.data.datasets.A2ODetections
+detections: [detections/a2o_site_209_detections.csv, ]
+sample_rate: 32000
+output_take_and_give:
+  audio: audio

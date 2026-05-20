@@ -1,5 +1,17 @@
 # A Template for Python-Based Projects at Earth Species Project
 
+```bash
+rsync -av --progress \
+  --exclude='__pycache__' \
+  --exclude='.venv' \
+  --exclude='*.pyc' \
+  --exclude='.git' \
+  --exclude='.mypy_cache' \
+  --exclude='.ruff_cache' \
+  /home/moritz_earthspecies_org/soundscape_mae/ \
+  /mnt/home/soundscape_mae/
+```
+
 For 2025, ESP is focusing on credibility. In terms of code, credibility relies on **trust**, and trust in code comes from structure and correctness.
 
 The main idea behind this repository is to ensure structure, consistency, and correctness for ESP Python projects.

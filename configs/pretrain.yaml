@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - _self_
+  - data: pretrain
+  - module: mae
+  - paths: default
+  - trainer: pretrain
+
+seed: 42

@@ -1,0 +1,44 @@
+train: 
+  _target_: esp_data.DatasetConfig
+  dataset_name: xeno-canto
+  sample_rate: 32000
+  split: all_unseen
+  output_take_and_give:
+    audio: audio
+    label: label
+  transformations: 
+    - _target_: soundscape_ssl.data.CastConfig
+      type: cast
+      property: gbifID
+      cast_class: 
+        _target_: polars.Int64
+    - _target_: soundscape_ssl.data.FilterFixConfig
+      type: filter_fix
+      property: gbifID
+      values: [2474659, 2475187, 2475290, 2475466, 2475492, 2477507, 2477533, 2477556, 2477560, 2477630, 2478122, 2478345, 2478573, 2478774, 2478973, 2479031, 2479113, 2479446, 2479576, 2479606, 2479902, 2480808, 2481073, 2481082, 2481087, 2481088, 2482254, 2482899, 2482908, 2482929, 2482940, 2482965, 2482991, 2483380, 2483410, 2483531, 2483624, 2483629, 2483676, 2483680, 2483792, 2483855, 2483871, 2484069, 2484222, 2484230, 2484920, 2485628, 2485701, 2485705, 2485789, 2485950, 2486253, 2486255, 2486357, 2486429, 2486506, 2487653, 2487964, 2488217, 2488932, 2490079, 2490137, 2490142, 2490146, 2490157, 2490164, 2490178, 2490190, 2490191, 2490203, 2490218, 2490224, 2490230, 2490548, 2490549, 2490551, 2490722, 2490743, 2490782, 2495295, 2495314, 2495321, 2495339, 2495922, 2496081, 2496121, 2496432, 2496647, 2496659, 2496700, 2496811, 2497332, 2497983, 5228043, 5228246, 5228881, 5228906, 5228945, 5229575, 5229602, 5229826, 5229832, 5230046, 5230133, 5230139, 5230149, 5230154, 5230207, 5230249, 5230343, 5230363, 5230496, 5230705, 5230942, 5231468, 5231932, 5232089, 5232118, 5959208, 5959219, 7340140, 7340634, 7341038, 7444611, 8223154, 8356516, 9419574, 9429836, 9462558, 9819034]
+    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+      type: mulitlabel_from_feature
+      is_multilabel: False
+      feature: gbifID
+
+test:
+  _target_: esp_data.DatasetConfig
+  dataset_name: birdset
+  sample_rate: 32000
+  split: PER-test_5s
+  output_take_and_give:
+    audio: audio
+    label: label
+  transformations: 
+    - _target_: soundscape_ssl.data.CastConfig
+      type: cast
+      property: gbifID_multispecies
+      extract_all_regex: \d+
+      cast_class: 
+        _target_: polars.List
+        inner:
+          _target_: polars.Int64
+    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+      type: mulitlabel_from_feature
+      is_multilabel: True
+      feature: gbifID_multispecies

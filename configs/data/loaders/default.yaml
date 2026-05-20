@@ -1,0 +1,11 @@
+train:
+  batch_size: 128
+  num_workers: 20
+  pin_memory: True
+  persistent_workers: True
+  prefetch_factor: 6
+val_test:
+  batch_size: 128
+  num_workers: 20
+  pin_memory: True
+  persistent_workers: True

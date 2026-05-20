@@ -1,0 +1,8 @@
+defaults:
+  - _self_
+  - transforms: default
+  - loaders: default
+  - datasets@datasets: train/hsn
+
+weights: null
+num_classes: null

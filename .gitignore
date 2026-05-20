@@ -11,6 +11,7 @@ pip-wheel-metadata/
 .ipynb_checkpoints
 .mypy_cache/
 .vscode/
+.github
 
 # PyTorch
 runs/
@@ -30,3 +31,6 @@ logs/
 .DS_Store
 .Trashes
 Thumbs.db
+
+outputs
+detections

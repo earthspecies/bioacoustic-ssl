@@ -1,0 +1,51 @@
+train: 
+  _target_: esp_data.DatasetConfig
+  dataset_name: xeno-canto
+  sample_rate: 32000
+  split: all_unseen
+  output_take_and_give:
+    audio: audio
+    label: label
+  transformations: 
+    - _target_: soundscape_ssl.data.CastConfig
+      type: cast
+      property: gbifID
+      cast_class: 
+        _target_: polars.Int64
+    - _target_: soundscape_ssl.data.FilterFixConfig
+      type: filter_fix
+      property: gbifID
+      values: [2478259, 2481798, 2482614, 2482803, 2484183, 2487446, 2487825, 2490263, 2490810, 2490935, 2491872, 2494360, 5231132, 5231483, 7341805, 7341834, 8169649, 8255548, 9362842, 9510564, 9761484]
+    - _target_: soundscape_ssl.data.CastConfig
+      type: cast
+      property: gbifID
+      cast_class: 
+        _target_: polars.List
+        inner:
+          _target_: polars.Int64
+    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+      type: mulitlabel_from_feature
+      is_multilabel: True
+      feature: gbifID
+
+test:
+  _target_: esp_data.DatasetConfig
+  dataset_name: birdset
+  sample_rate: 32000
+  split: HSN-test_5s
+  output_take_and_give:
+    audio: audio
+    label: label
+  transformations: 
+    - _target_: soundscape_ssl.data.CastConfig
+      type: cast
+      property: gbifID_multispecies
+      extract_all_regex: \d+
+      cast_class: 
+        _target_: polars.List
+        inner:
+          _target_: polars.Int64
+    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+      type: mulitlabel_from_feature
+      is_multilabel: True
+      feature: gbifID_multispecies

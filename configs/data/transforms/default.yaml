@@ -1,0 +1,29 @@
+- _target_: soundscape_ssl.data.transforms.ToTensor
+  keys: [audio, label]
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.TimeShift
+  p: 1.0
+  output_length: 160000
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.RollingWindow
+  p: 1.0
+- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+  num_classes: ${data.num_classes}
+- _target_: soundscape_ssl.data.transforms.MeanMix
+  p: 0.5
+  max_samples: 2
+  label_key: label
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.PeakNormalize
+  target_key: audio
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.Spectrogram
+  sample_rate: 32000
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.Padding
+  target_shape: [128, 512]
+  _stage_: [train, test]
+- _target_: torch.utils.data.default_collate
+  _partial_: true
+  _stage_: [train, test]
+

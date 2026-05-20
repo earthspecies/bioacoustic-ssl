@@ -1,0 +1,6 @@
+# @package module.metrics.map
+
+_target_: torchmetrics.classification.MultilabelAveragePrecision
+num_labels: ${data.num_classes}
+average: "macro"
+_stage_: ["test"]

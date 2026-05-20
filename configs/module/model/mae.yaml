@@ -1,0 +1,20 @@
+img_size: [128, 512]
+patch_size: 16
+in_chans: 1
+encoder_embed_dim: 768
+encoder_depth: 12
+encoder_num_heads: 12
+decoder_embed_dim: 512
+decoder_depth: 8
+decoder_num_heads: 16
+mlp_ratio: 4.0
+mask_ratio: 0.75
+norm_pix_loss: true
+drop_rate: 0.0
+attn_drop_rate: 0.0
+drop_path_rate: 0.1
+decoder_drop_path_rate: 0.0
+norm_eps: 1.0e-6
+grad_checkpoint: false
+pos_embed_type: sinusoidal_2d
+decoder_pos_embed_type: sinusoidal_2d

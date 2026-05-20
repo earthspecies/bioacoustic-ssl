@@ -1,0 +1,5 @@
+# @package module.metrics.t1
+
+_target_: soundscape_ssl.metrics.TopKAccuracy
+topk: 1
+_stage_: ["test"]

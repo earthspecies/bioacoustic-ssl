@@ -3,18 +3,42 @@
 # According to your needs.
 
 [project]
-name = "PyStarterPack"
+name = "soundscape-ssl"
 version = "1.0.0"
 description = "A simple boiler plate for continuous integration and good practices of ESP projects."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 dependencies = [
-  "torch==2.2.0",
+  "datasets<=3.6.0",
+  "esp-data>=1.9.0",
+  "hydra-core>=1.3.2",
+  "lightning>=2.0.0",
+  "matplotlib>=3.10.9",
+  "torch>=2.5.0,<2.6.0",
+  "torch-audiomentations>=0.12.0",
+  "torchaudio>=2.5.0,<2.6.0",
+  "torchcodec>=0.11.1",
+  "torchvision>=0.20.0,<0.21.0",
+  "tqdm>=4.0.0",
+  "transformers>=5.6.1",
+  "wandb>=0.26.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "esp-data>=1.9.0",
+  "pre-commit<=4.2.0",
+  "pytest<=7.4.0",
+  "ruff<=0.11.2",
+  "click<=8.1.7",
+  "isort<=5.13.2",
+  "pytest<=7.4.0",
+  "yamllint<=1.35.1",
+  "deptry<=0.23.0",
 ]
 
 [dependency-groups]
-
 dev = [
   "pre-commit<=4.2.0",
   "pytest<=7.4.0",
@@ -26,6 +50,7 @@ dev = [
   "deptry<=0.23.0",
 ]
 
+
 [project.urls]
 Homepage = "https://github.com/earthspecies/PyProjectStarterPack"
 Repository = "https://github.com/earthspecies/PyProjectStarterPack"
@@ -35,7 +60,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["my_dummy_library"]
+packages = ["src/soundscape_ssl"]
 
 [tool.pytest.ini_options]
 python_files = [
@@ -86,3 +111,14 @@ exclude = ["conftest.py", ".venv", "tests"]
 
 [tool.deptry.per_rule_ignores]
 DEP002 = ["librosa", "soundfile", "ffmpeg"]
+
+[[tool.uv.index]]
+name = "esp-pypi"
+url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+explicit = true
+
+[tool.uv.sources]
+esp-data = { index = "esp-pypi" }
+
+[tool.uv]
+keyring-provider = "subprocess"

@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - _self_
+  - data: train
+  - module: vit
+  - paths: default
+  - trainer: train
+
+seed: 42
