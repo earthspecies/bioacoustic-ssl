@@ -2,7 +2,7 @@ from typing import List, Literal, Any
 
 import polars as pl
 from esp_data.backends import DataBackend, PolarsBackend
-from esp_data.transforms import LabelFromFeature, register_transform, Filter
+from esp_data.transforms import LabelFromFeature, register_transform, Filter, LongTailUpsample
 from pydantic import BaseModel
 
 
@@ -26,6 +26,107 @@ class CastConfig(BaseModel):
     property: str
     cast_class: Any
     extract_all_regex: str = None
+
+
+class LongTailUpsampleTargetConfig(BaseModel):
+    type: Literal["long_tail_upsample_target"]
+    property: str
+    target_count: int = None
+    sufficient_threshold: int
+    max_repeats: int
+    seed: int
+
+
+class LongTailUpsampleTarget(LongTailUpsample):
+    """Upsample *and* downsample all categories to a fixed target count.
+
+    Extends :class:`LongTailUpsample` with an optional ``target_count``
+    parameter.  When *no* target is given this class behaves identically to
+    its parent — under-represented categories are lifted towards
+    ``sufficient_threshold`` while well-represented categories are left
+    untouched.
+
+    When ``target_count`` is set every category is resampled to that count:
+
+    - Categories *above* ``target_count`` are downsampled (without
+      replacement) to ``target_count``.
+    - Categories *below* ``target_count`` are upsampled (with replacement)
+      to ``min(target_count, count * max_repeats)``, so very rare categories
+      are boosted as much as possible without repeating any single example
+      more than ``max_repeats`` times.
+
+    Parameters
+    ----------
+    property : str
+        The name of the property (column) to balance on.
+    sufficient_threshold : int
+        Forwarded to the parent; governs the no-target strategy.
+    max_repeats : int
+        Maximum number of times any individual example may appear in the
+        output.  Limits how aggressively very rare categories are upsampled.
+    seed : int
+        Random seed for reproducibility.  Defaults to 42.
+    target_count : int | None
+        Desired per-category sample count.  When ``None`` the parent strategy
+        is used unchanged.
+    """
+
+    def __init__(
+        self,
+        property: str,
+        sufficient_threshold: int,
+        max_repeats: int,
+        seed: int = 42,
+        target_count: int | None = None,
+    ) -> None:
+        super().__init__(
+            property=property,
+            sufficient_threshold=sufficient_threshold,
+            max_repeats=max_repeats,
+            seed=seed,
+        )
+        self.target_count = target_count
+
+    @classmethod
+    def from_config(cls, cfg: LongTailUpsampleTargetConfig) -> "LongTailUpsampleTarget":
+        return cls(**cfg.model_dump(exclude=("type",)))
+
+    def __call__(self, backend: DataBackend) -> tuple[DataBackend, dict]:
+        if self.target_count is None:
+            return super().__call__(backend)
+
+        if self.property not in backend.columns:
+            raise KeyError(f"Property '{self.property}' not found in the DataFrame columns.")
+
+        category_counts = backend.histogram(self.property)
+
+        if not category_counts:
+            return backend, {"histogram_before": {}, "histogram_after": {}}
+
+        target_counts: dict[str, int] = {}
+        for value, count in category_counts.items():
+            if count == 0:
+                target_counts[value] = 0
+            elif count >= self.target_count:
+                # Downsample over-represented categories to the target.
+                target_counts[value] = self.target_count
+            else:
+                # Upsample under-represented categories towards the target,
+                # bounded by how many times each example may be repeated.
+                target_counts[value] = min(self.target_count, count * self.max_repeats)
+
+        sampled_backend = backend.upsample_by_column(
+            column=self.property,
+            target_counts=target_counts,
+            seed=self.seed,
+        )
+
+        histogram_after = sampled_backend.histogram(self.property)
+
+        return sampled_backend, {
+            "histogram_before": category_counts,
+            "histogram_after": histogram_after,
+        }
 
 
 class Cast:
@@ -103,13 +204,7 @@ class MultiLabelFromFeature(LabelFromFeature):
         return backend.add_column(self.output_feature, mapped), metadata
 
 
-
-    type: Literal["filter_fix"]
-    mode: Literal["include", "exclude"] = "include"
-    property: str
-    values: list[int | str]
-
-
 register_transform(MultiLabelFromFeatureConfig, MultiLabelFromFeature)
 register_transform(FilterFixConfig, Filter)
 register_transform(CastConfig, Cast)
+register_transform(LongTailUpsampleTargetConfig, LongTailUpsampleTarget)

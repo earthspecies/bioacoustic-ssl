@@ -33,6 +33,11 @@ class MultiHotEncoder(Transform):
                 raw = [raw]
             vec = torch.zeros(self.num_classes, dtype=torch.float32)
             for label in raw:
-                vec[label] = 1.0
+                try:
+                    vec[label] = 1.0
+                except Exception as e:
+                    print(label, type(label))
+                    raise e
+
             batch[i][self.label_key] = vec
         return batch

@@ -5,9 +5,7 @@ from __future__ import annotations
 import io
 import itertools
 import os
-import random
 import time
-import warnings
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -21,6 +19,7 @@ from esp_data import Dataset, DatasetConfig, DatasetInfo
 from esp_data.backends import BackendType, get_backend
 from esp_data.io import audio_stereo_to_mono
 from esp_data.io.read_utils import _read_audio_from_file
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 __all__ = ["Arbimon", "ArbimonDetections"]
 
@@ -1134,7 +1133,13 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         401-handling in ``_get_auth`` will refresh it if expired.
         """
         if not hasattr(self, "_http") or self._http is None:
-            self._http = httpx.Client(timeout=httpx.Timeout(30.0, read=None))
+            self._http = httpx.Client(
+                timeout=httpx.Timeout(30.0, read=None),
+                limits=httpx.Limits(
+                    max_keepalive_connections=5,
+                    max_connections=10,
+                ),
+            )
 
     def __getstate__(self) -> dict:
         """Return pickle state without the unpicklable HTTP client.
@@ -1211,7 +1216,10 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         """
         if self._prefetch_factor <= 0:
             for det in self._detections:
-                yield self._process_detection(det)
+                try:
+                    yield self._process_detection(det)
+                except ValueError:
+                    continue
             return
 
         dets = iter(self._detections)
@@ -1416,11 +1424,17 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         start_dt = stream_start + timedelta(seconds=detection["start_seconds"])
         end_dt = stream_start + timedelta(seconds=detection["end_seconds"])
 
-        # Round the fetch start down to the minute boundary so that the segment
-        # containing start_dt is included (RFCx filters by segment start time).
-        fetch_start = start_dt.replace(second=0, microsecond=0)
+        # Round the fetch start down to the minute boundary, then go back one
+        # extra minute.  RFCx segments do not necessarily start on exact minute
+        # boundaries — the containing segment's start can be up to ~60 s before
+        # start_dt's own minute boundary, so we need to query one minute earlier
+        # to guarantee it is included.
+        fetch_start = start_dt.replace(second=0, microsecond=0) - timedelta(minutes=1)
         fetch_start_iso = fetch_start.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        fetch_end_iso = end_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        # Add 1 minute to fetch_end so we always fetch the segment that contains
+        # end_dt, regardless of whether the API uses exclusive-end semantics or
+        # whether strftime's sub-second truncation puts us exactly on a boundary.
+        fetch_end_iso = (end_dt + timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         resp = self._get_auth(
             f"{_API_BASE}/streams/{stream_id}/segments",
@@ -1434,6 +1448,7 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         segments: list[dict[str, Any]] = resp.json()
 
         if not segments:
+            print(f"No segments found for stream {stream_id!r}")
             raise ValueError(
                 f"No segments found for stream {stream_id!r} "
                 f"in window {fetch_start_iso} - {fetch_end_iso}."
@@ -1454,8 +1469,21 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         end_offset_s = (end_dt - first_seg_start).total_seconds()
 
         start_sample = max(0, int(start_offset_s * sr))
-        end_sample = min(len(full_audio), int(end_offset_s * sr))
+        # Clamp end_sample from below as well: a negative value (when end_dt falls
+        # before first_seg_start) would make NumPy treat it as an offset from the
+        # array end, silently yielding an empty or wrong slice.
+        end_sample = max(0, min(len(full_audio), int(end_offset_s * sr)))
         audio = full_audio[start_sample:end_sample]
+        if len(audio) == 0:
+            raise ValueError(
+                f"Empty audio slice for stream {stream_id!r}: "
+                f"detection=({detection['start_seconds']:.3f}s–{detection['end_seconds']:.3f}s), "
+                f"stream_start={stream_start.isoformat()}, "
+                f"fetch_window=[{fetch_start_iso}, {fetch_end_iso}], "
+                f"first_seg_start={first_seg_start.isoformat()}, "
+                f"start_offset={start_offset_s:.6f}s, end_offset={end_offset_s:.6f}s, "
+                f"full_audio={len(full_audio) / sr:.3f}s @ {sr} Hz"
+            )
 
         if self.sample_rate is not None and sr != self.sample_rate:
             audio = librosa.resample(
@@ -1483,6 +1511,17 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
             }
         return row
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        reraise=True,  # re-raise the final failure after last attempt
+    )
+    def _fetch_s3(self, url: str) -> httpx.Response:
+        """Download from a presigned S3 URL with automatic retries on 5xx."""
+        resp = self._http.get(url, follow_redirects=True)
+        resp.raise_for_status()
+        return resp
+
     def _download_segment(self, stream_id: str, seg_start: str) -> tuple[np.ndarray, int]:
         """Download and decode one RFCx audio segment.
 
@@ -1506,8 +1545,7 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         url = f"{_API_BASE}/streams/{stream_id}/segments/{start_str}/file"
         redirect_resp = self._get_redirecting(url, params={"file_extension": "flac"})
         s3_url = redirect_resp.headers["location"]
-        s3_resp = self._http.get(s3_url, follow_redirects=True)
-        s3_resp.raise_for_status()
+        s3_resp = self._fetch_s3(s3_url)
         audio, sr = _read_audio_from_file(io.BytesIO(s3_resp.content), format="FLAC")
         audio = audio.astype(np.float32)
         return audio_stereo_to_mono(audio, mono_method="average"), sr

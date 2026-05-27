@@ -1,6 +1,15 @@
 from .iterable_dataset import MixedStreamingDataset
 from .transforms.base import Compose, Lambda
-from .utils import Cast, CastConfig, Filter, FilterFixConfig, MultiLabelFromFeature, MultiLabelFromFeatureConfig
+from .utils import (
+    Cast,
+    CastConfig,
+    Filter,
+    FilterFixConfig,
+    LongTailUpsampleTarget,
+    LongTailUpsampleTargetConfig,
+    MultiLabelFromFeature,
+    MultiLabelFromFeatureConfig,
+)
 
 __all__ = [
     "Compose",
@@ -11,5 +20,7 @@ __all__ = [
     "FilterFixConfig",
     "Filter",
     "CastConfig",
-    "Cast"
+    "Cast",
+    "LongTailUpsampleTarget",
+    "LongTailUpsampleTargetConfig"
 ]

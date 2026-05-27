@@ -29,21 +29,15 @@ class TorchAudioTransform(Transform):
     def __init__(
         self,
         transform: Any,
-        audio_key: str = "audio",
+        audio_key: str = "spectrogram",
     ) -> None:
         super().__init__()
         self.transform = transform
         self.audio_key = audio_key
 
-    def __call__(self, sample: dict) -> dict:
-        audio = sample[self.audio_key]
-        squeeze = audio.ndim == 1
-        if squeeze:
-            audio = audio.unsqueeze(0)  # (1, T)
-        audio = self.transform(audio)
-        if squeeze:
-            audio = audio.squeeze(0)
-        return {**sample, self.audio_key: audio}
+    def __call__(self, batch: dict) -> dict:
+        batch[self.audio_key] = self.transform(batch[self.audio_key])
+        return batch
 
 
 class TorchAudiomentationsTransform(Transform):

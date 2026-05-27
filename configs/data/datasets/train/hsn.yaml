@@ -16,6 +16,13 @@ train:
       type: filter_fix
       property: gbifID
       values: [2478259, 2481798, 2482614, 2482803, 2484183, 2487446, 2487825, 2490263, 2490810, 2490935, 2491872, 2494360, 5231132, 5231483, 7341805, 7341834, 8169649, 8255548, 9362842, 9510564, 9761484]
+    - _target_:  soundscape_ssl.data.LongTailUpsampleTargetConfig
+      type: long_tail_upsample_target
+      target_count: 500
+      property: gbifID
+      sufficient_threshold: 500
+      max_repeats: 10
+      seed: ${seed}
     - _target_: soundscape_ssl.data.CastConfig
       type: cast
       property: gbifID
