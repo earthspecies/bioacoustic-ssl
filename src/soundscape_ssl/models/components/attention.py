@@ -13,6 +13,7 @@ class Attention(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         rope: nn.Module | None = None,
+        qkv_norm: bool = False,
     ):
         super().__init__()
         self.num_heads = num_heads
@@ -24,6 +25,10 @@ class Attention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
+
+        self.q_norm = nn.LayerNorm(head_dim) if qkv_norm else nn.Identity()
+        self.k_norm = nn.LayerNorm(head_dim) if qkv_norm else nn.Identity()
+        #self.v_norm = nn.LayerNorm(head_dim) if qkv_norm else nn.Identity()
 
     def forward(
         self,
@@ -38,15 +43,18 @@ class Attention(nn.Module):
         )
         q, k, v = qkv[0], qkv[1], qkv[2]  # (B, H, N, D_head)
 
+        q, k = self.q_norm(q), self.k_norm(k)
+
         if self.rope is not None:
             q = self.rope(q, pos_ids=pos_ids)
             k = self.rope(k, pos_ids=pos_ids)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = F.scaled_dot_product_attention(
+            q, k, v,
+            attn_mask=None,
+            dropout_p=self.attn_drop.p if self.training else 0.0,
+            scale=self.scale,
+        ).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -67,6 +75,7 @@ class SDPAttention(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         is_causal: bool = False,
+        qkv_norm: bool = False,
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
@@ -80,6 +89,10 @@ class SDPAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+        self.q_norm = nn.LayerNorm(self.head_dim) if qkv_norm else nn.Identity()
+        self.k_norm = nn.LayerNorm(self.head_dim) if qkv_norm else nn.Identity()
+        self.v_norm = nn.LayerNorm(self.head_dim) if qkv_norm else nn.Identity()
+
     def forward(self, x: Tensor) -> Tensor:
         B, N, C = x.shape
 
@@ -90,6 +103,7 @@ class SDPAttention(nn.Module):
             .permute(2, 0, 3, 1, 4)
         )
         q, k, v = qkv.unbind(0)
+        q, k, v = self.q_norm(q), self.k_norm(k), self.v_norm(v)
 
         # Fused attention: handles scaling, softmax, and dropout internally
         x = F.scaled_dot_product_attention(

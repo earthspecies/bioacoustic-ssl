@@ -7,7 +7,7 @@ from soundscape_ssl.data.transforms.base import Transform
 class PeakNormalize(Transform):
     def __init__(
         self,
-        target_key: str = "spectrogram",
+        target_key: str = "audio",
     ) -> None:
         super().__init__()
         self.target_key = target_key

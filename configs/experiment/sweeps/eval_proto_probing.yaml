@@ -1,0 +1,16 @@
+# @package _global_
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+
+
+
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      #data/datasets: train/hsn, train/nbp, train/nes, train/per, train/pow, train/sne, train/ssw, train/uhh
+      data/datasets: train/hsn, train/nbp, train/nes, train/per, train/pow, train/sne, train/ssw, train/uhh
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC.ckpt #, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_terrestrial.ckpt

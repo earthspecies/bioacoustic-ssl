@@ -30,10 +30,22 @@ def param_groups_lrd(
     weight_decay: float = 0.05,
     no_weight_decay_list: list[str] | None = None,
     layer_decay: float = 0.75,
+    prototype_lr: float | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Parameter groups for layer-wise lr decay.
     Compatible with MAE (model.encoder.blocks) and standalone ViT (model.blocks).
+
+    Args:
+        model: The model whose parameters are to be grouped.
+        weight_decay: Weight decay applied to non-excluded parameters.
+        no_weight_decay_list: Parameter name patterns exempt from weight decay.
+        layer_decay: Multiplicative factor per layer for lr decay.
+        prototype_lr: When set, any parameter whose name contains
+            ``"prototype_vectors"`` (e.g. ``head.prototype_vectors`` in
+            :class:`ViTProtoFloat`) is removed from the layer-decay groups and
+            placed in a dedicated group with this fixed absolute learning rate.
+            Leave as ``None`` (default) for standard :class:`ViTClassifier` usage.
     """
     if no_weight_decay_list is None:
         no_weight_decay_list = []
@@ -50,6 +62,10 @@ def param_groups_lrd(
 
     for n, p in model.named_parameters():
         if not p.requires_grad:
+            continue
+
+        # Prototype vectors get their own fixed-lr group (see below).
+        if prototype_lr is not None and "prototype_vectors" in n:
             continue
 
         if p.ndim == 1 or n in no_weight_decay_list or any(n.endswith(pat) for pat in no_weight_decay_list):
@@ -77,6 +93,26 @@ def param_groups_lrd(
 
         param_group_names[group_name]["params"].append(n)
         param_groups[group_name]["params"].append(p)
+
+    # Add a dedicated group for prototype vectors when prototype_lr is requested.
+    if prototype_lr is not None:
+        proto_names = [
+            n for n, p in model.named_parameters()
+            if p.requires_grad and "prototype_vectors" in n
+        ]
+        proto_params = [
+            p for n, p in model.named_parameters()
+            if p.requires_grad and "prototype_vectors" in n
+        ]
+        if proto_params:
+            param_group_names["prototypes"] = {
+                "lr": prototype_lr,
+                "params": proto_names,
+            }
+            param_groups["prototypes"] = {
+                "lr": prototype_lr,
+                "params": proto_params,
+            }
 
     return list(param_groups.values()), param_group_names
 

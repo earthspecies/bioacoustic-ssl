@@ -3,7 +3,10 @@ defaults:
   - _self_
   - data: train
   - module: vit
+  - experiment: null
   - paths: default
   - trainer: train
 
 seed: 42
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}

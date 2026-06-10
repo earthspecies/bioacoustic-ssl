@@ -1,0 +1,7 @@
+# @package data.datasets.a2o_hf
+
+_target_: soundscape_ssl.data.datasets.soundscape_pretrain.SoundscapePretrain
+split: a2o
+sample_rate: 32000
+output_take_and_give:
+  audio_bytes: audio_bytes

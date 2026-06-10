@@ -1,16 +1,17 @@
 defaults:
-  - model: vit
+  - model: vit_proto
   - loss: asymmetric_loss_multilabel
   - metrics: [map, auroc, t1]
 
 
 optimizer:
   # Effective LR = base_lr * batch_size / 256 (linear scaling rule)
-  base_lr: 1.5e-4
-  weight_decay: 1e-4
+  base_lr: 0.01 # 3e-4
+  prototype_lr: 0.01 #4e-2
+  weight_decay: 3e-4
   betas: [0.9, 0.95]
   layer_decay: 0.75
 
 scheduler:
-  warmup_steps: 20000
+  warmup_steps: 0.10
   min_lr: 1.0e-6

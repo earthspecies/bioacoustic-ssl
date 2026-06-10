@@ -1,53 +1,58 @@
-# TODO (OSS): change [project]`, `[dependency-groups]`,
-# `[project.urls]`, and `[tool.hatch.build.targets.wheel]
-# According to your needs.
-
 [project]
 name = "soundscape-ssl"
 version = "1.0.0"
 description = "A simple boiler plate for continuous integration and good practices of ESP projects."
 readme = "README.md"
-requires-python = ">=3.11"
+
+requires-python = ">=3.12,<3.14"
 
 dependencies = [
-  "datasets<=3.6.0",
+  "datasets",
   "esp-data>=1.9.0",
+  "huggingface-hub",
   "hydra-core>=1.3.2",
+  "hydra-submitit-launcher>=1.2.0",
   "lightning>=2.0.0",
   "matplotlib>=3.10.9",
-  "torch>=2.5.0,<2.6.0",
+  "soundfile>=0.12.1",
+  "tenacity>=9.1.4",
   "torch-audiomentations>=0.12.0",
-  "torchaudio>=2.5.0,<2.6.0",
-  "torchcodec>=0.11.1",
-  "torchvision>=0.20.0,<0.21.0",
   "tqdm>=4.0.0",
   "transformers>=5.6.1",
   "wandb>=0.26.1",
 ]
 
-[project.optional-dependencies]
-dev = [
-  "esp-data>=1.9.0",
-  "pre-commit<=4.2.0",
-  "pytest<=7.4.0",
-  "ruff<=0.11.2",
-  "click<=8.1.7",
-  "isort<=5.13.2",
-  "pytest<=7.4.0",
-  "yamllint<=1.35.1",
-  "deptry<=0.23.0",
-]
-
 [dependency-groups]
 dev = [
-  "pre-commit<=4.2.0",
-  "pytest<=7.4.0",
-  "ruff<=0.11.2",
-  "click<=8.1.7",
-  "isort<=5.13.2",
-  "pytest<=7.4.0",
-  "yamllint<=1.35.1",
-  "deptry<=0.23.0",
+  "basedpyright>=1.34.0",
+  "deptry>=0.23.1",
+  "isort>=6.1.0",
+  "mike>=2.1.3",
+  "mkdocs>=1.6.1",
+  "mkdocs-material>=9.6.21",
+  "mkdocstrings-python>=1.18.2",
+  "mypy>=1.18.2",
+  "prek>=0.2.28",
+  "pytest>=8.4.2",
+  "ruff>=0.11.2",
+  "ty>=0.0.9", # TODO: decide if we want to keep this after experimenting
+  "keyrings-google-artifactregistry-auth>=1.1.2",
+  "yamllint>=1.37.1",
+  "pytest-asyncio>=0.25.0",
+]
+
+cpu = [
+  "torch>=2.2.0",
+  "torchaudio",
+  "torchvision",
+  "torchcodec"
+]
+
+gpu = [
+  "torch>=2.2.0",
+  "torchaudio",
+  "torchvision",
+  "torchcodec"
 ]
 
 
@@ -56,11 +61,54 @@ Homepage = "https://github.com/earthspecies/PyProjectStarterPack"
 Repository = "https://github.com/earthspecies/PyProjectStarterPack"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.8.5,<0.9.0"]
+build-backend = "uv_build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/soundscape_ssl"]
+[tool.uv]
+keyring-provider = "subprocess"
+default-groups = ["dev", "gpu"]
+conflicts = [
+  [
+    { group = "cpu" },
+    { group = "gpu" },
+  ],
+]
+
+[[tool.uv.index]]
+name = "esp-pypi"
+url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+
+[tool.uv.sources]
+esp-data = { index = "esp-pypi" }
+torch = [
+  { index = "pytorch-cpu", group = "cpu" },
+  { index = "pytorch-cu124", group = "gpu", marker = "platform_system == 'Linux'" },
+]
+torchaudio = [
+  { index = "pytorch-cpu", group = "cpu" },
+  { index = "pytorch-cu124", group = "gpu", marker = "platform_system == 'Linux'" },
+]
+torchvision = [
+  { index = "pytorch-cpu", group = "cpu" },
+  { index = "pytorch-cu124", group = "gpu", marker = "platform_system == 'Linux'" },
+]
+torchcodec = [
+  { index = "pytorch-cpu", group = "cpu" },
+  { index = "pytorch-cu124", group = "gpu", marker = "platform_system == 'Linux'" },
+]
+
 
 [tool.pytest.ini_options]
 python_files = [
@@ -68,16 +116,15 @@ python_files = [
     "check_*.py",
 ]
 
+
 [tool.ruff]
 line-length = 120
 indent-width = 4
+exclude = ["tests", "scripts", "docs/hooks"]
+src = ["src", "projects/*", "projects/*/src"]
 
-[tool.ruff.flake8-annotations]
-allow-star-arg-any = true
 
 [tool.ruff.lint]
-# List of plugins and Rules
-# Pycodestyle all errors and warning, Pydoclint, Pyflakes, bugbear, annotations
 select = [
   "E4",
   "E7",
@@ -91,6 +138,9 @@ extend-select = ["DOC", "B9", "B", "E", "W", "ANN"]
 fixable = ["ALL"]
 unfixable = []
 preview = true
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
 
 [tool.ruff.format]
 quote-style = "double"
@@ -106,19 +156,7 @@ max-complexity = 10
 [tool.codespell]
 skip = "*.csv"
 
-[tool.deptry]
-exclude = ["conftest.py", ".venv", "tests"]
-
 [tool.deptry.per_rule_ignores]
-DEP002 = ["librosa", "soundfile", "ffmpeg"]
-
-[[tool.uv.index]]
-name = "esp-pypi"
-url = "https://oauth2accesstoken@us-central1-python.pkg.dev/okapi-274503/esp-pypi/simple/"
-explicit = true
-
-[tool.uv.sources]
-esp-data = { index = "esp-pypi" }
-
-[tool.uv]
-keyring-provider = "subprocess"
+DEP004 = [
+  "torch", # torch is defined in groups and deptry doesn't seem to understand uv groups
+]

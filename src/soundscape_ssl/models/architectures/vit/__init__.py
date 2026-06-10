@@ -1,7 +1,10 @@
+from .classifier import ViTClassifier, ViTProtoFloat
 from .decoder import ViTDecoder
 from .encoder import ViTEncoder
 
 __all__ = [
-    "ViTEncoder",
+    "ViTClassifier",
+    "ViTProtoFloat",
     "ViTDecoder",
+    "ViTEncoder",
 ]

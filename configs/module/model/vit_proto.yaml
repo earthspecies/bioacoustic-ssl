@@ -1,3 +1,4 @@
+_target_: soundscape_ssl.models.ViTProtoFloat
 img_size: [128, 512]
 patch_size: 16
 in_chans: 1
@@ -11,3 +12,9 @@ drop_path_rate: 0.1
 norm_eps: 1.0e-6
 grad_checkpoint: false
 pos_embed_type: sinusoidal_2d
+qkv_norm: true
+
+# Classification head
+num_classes: ${data.num_classes}
+num_prototypes: 20
+head_drop: 0.0

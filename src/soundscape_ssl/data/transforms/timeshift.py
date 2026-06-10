@@ -5,14 +5,10 @@ import tempfile
 import numpy as np
 import soundfile as sf
 import torch
+from esp_data.io.read_utils import get_audio_info, read_audio_by_time
 from soundfile import LibsndfileError
 
 from soundscape_ssl.data.transforms.base import Transform
-
-# 256 KB — the minimum block size enforced by gcsfs (GCS_MIN_BLOCK_SIZE).
-# Using this value minimises over-fetching when soundfile triggers cache misses
-# in a gcsfs-backed file.  Reducing it further would cause gcsfs to raise.
-_GCS_BLOCK_SIZE = 2**18
 
 
 class TimeShift(Transform):
@@ -55,16 +51,14 @@ class TimeShift(Transform):
 
     def __init__(
         self,
-        output_length: int | float,
-        sample_rate: int | None = None,
+        output_length: float,
+        sample_rate: int,
         p: float = 1.0,
         audio_key: str = "audio",
     ) -> None:
         super().__init__()
         self.sample_rate = sample_rate
-        self.output_length = (
-            output_length if sample_rate is None else int(sample_rate * output_length)
-        )
+        self.output_length = output_length
         self.p = p
         self.audio_key = audio_key
 
@@ -126,74 +120,20 @@ class TimeShift(Transform):
             removed and ``"audio"`` (1-D :class:`torch.Tensor`, float32) plus
             ``"sample_rate"`` (int) added.
         """
-        from esp_data.io import filesystem_from_path  # deferred – not needed in standard mode
-
         audio_path: str = sample["audio_path"]
-        target_sr: int | None = self.sample_rate or sample.get("sample_rate")
+        info = get_audio_info(audio_path)
+        start_secs = random.uniform(0, max(info["duration"] - self.output_length, 0.0))
 
-        fs = filesystem_from_path(audio_path)
-        # block_size is the per-cache-miss download quantum.  Using the GCS
-        # minimum (256 KB) ensures we never download more than one extra block
-        # beyond what soundfile actually needs.  Local filesystems accept the
-        # kwarg and either use it for buffering or silently ignore it.
-        with fs.open(str(audio_path), "rb", block_size=_GCS_BLOCK_SIZE) as fh:
-            audio, sr = self._read_window_from_handle(fh, target_sr)
+        audio, sr = read_audio_by_time(audio_path, start_time=start_secs, end_time=start_secs + self.output_length)
+
+        target_sr: int | None = self.sample_rate or info["sr"]
 
         audio_tensor = self._postprocess(audio, sr, target_sr)
-        sr = target_sr if (target_sr and sr != target_sr) else sr
 
         out = {k: v for k, v in sample.items() if k not in ("audio_path", "audio_format")}
         out[self.audio_key] = audio_tensor
-        out["sample_rate"] = sr
+        out["sample_rate"] = target_sr
         return out
-
-    def _read_window_from_handle(
-        self, fh, target_sr: int | None
-    ) -> tuple[np.ndarray, int]:
-        """Open a soundfile handle, pick a random window, and read only that.
-
-        The ``SoundFile`` context manager reads the compressed header (one
-        cache-miss / Range request).  ``snd.seek()`` is free.  ``snd.read()``
-        triggers the second (and final) Range request for the audio data.
-
-        Parameters
-        ----------
-        fh :
-            An open file-like object (local or gcsfs-backed).
-        target_sr : int or None
-            Target sample rate used to convert ``self.output_length`` to
-            native frames when resampling is needed.
-
-        Returns
-        -------
-        tuple[np.ndarray, int]
-            ``(audio_array, native_sample_rate)``
-        """
-        with sf.SoundFile(fh) as snd:
-            native_sr: int = snd.samplerate
-            total_frames: int = snd.frames
-
-            # Convert output_length (in target_sr samples) to native frames.
-            if target_sr and target_sr != native_sr:
-                native_output_frames = int(self.output_length * native_sr / target_sr)
-            else:
-                native_output_frames = self.output_length
-
-            # Apply crop with probability p; if skipped, read the full file.
-            apply_crop = (
-                total_frames > native_output_frames and torch.rand(()).item() < self.p
-            )
-            if apply_crop:
-                start = random.randint(0, total_frames - native_output_frames)
-                snd.seek(start)  # free: just updates self.loc on the cache object
-                n_to_read = native_output_frames
-            else:
-                n_to_read = total_frames  # no crop; snd is already at frame 0
-
-            # This is where the network transfer happens for remote files.
-            audio = snd.read(n_to_read, dtype="float32", always_2d=False)
-
-        return audio, native_sr
 
     # ------------------------------------------------------------------
     # Bytes mode – decides the crop window before decoding
@@ -245,7 +185,7 @@ class TimeShift(Transform):
             # output_length is at target_sr; convert duration to native frames
             native_output_frames = int(self.output_length * native_sr / target_sr)
         else:
-            native_output_frames = self.output_length
+            native_output_frames = int(self.output_length * native_sr)
 
         # ---- 3. random start, decode only the window ----------------------
         if total_frames <= native_output_frames:

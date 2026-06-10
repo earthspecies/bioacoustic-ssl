@@ -2,10 +2,12 @@
 
 from typing import Any
 
+from esp_data import DatasetInfo, register_dataset
 from esp_data.datasets import XenoCanto
-from esp_data.io import anypath, filesystem_from_path
+from esp_data.io import DATA_HOME, anypath, filesystem_from_path
 
 
+@register_dataset
 class XenoCantoRaw(XenoCanto):
     """XenoCanto dataset that returns raw compressed bytes instead of decoded audio.
 
@@ -50,6 +52,27 @@ class XenoCantoRaw(XenoCanto):
     >>> "audio" not in sample
     True
     """
+
+    info = DatasetInfo(
+        name="xeno-canto-raw",
+        owner="david; gagan",
+        split_paths={
+            "train": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/train_20260203_v2.csv",
+            "validation": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/val_20260203_v2.csv",
+            "all": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/all_20260203_v2.csv",
+            "train_unseen": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/train_unseen_20260203_v2.csv",
+            "validation_unseen": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/val_unseen_20260203_v2.csv",
+            "all_unseen": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/all_unseen_20260203_v2.csv",
+        },
+        version="0.1.0",
+        description="Xeno-canto audio dataset with taxonomic metadata. "
+        "Available at original (variable) sample rates and 32kHz (pre-resampled). "
+        "Pre-resampled audio uses librosa's kaiser_best resampling method. "
+        "Xeno-canto dump as of Oct 2025. "
+        "Train/val split is 90%/10% with random seed 42.",
+        sources=["Xeno-canto"],
+        license="CC BY-NC-SA 4.0, CC BY-NC 4.0, CC BY-SA, CC0",
+    )
 
     def _resolve_audio_path(self, row: dict[str, Any]):
         """Return the file path for a given metadata row.
@@ -125,6 +148,7 @@ class XenoCantoRaw(XenoCanto):
         return item
 
 
+@register_dataset
 class XenoCantoLazy(XenoCanto):
     """XenoCanto dataset that defers all I/O to the transform pipeline.
 
@@ -180,6 +204,27 @@ class XenoCantoLazy(XenoCanto):
     >>> "audio" not in sample and "audio_bytes" not in sample
     True
     """
+
+    info = DatasetInfo(
+        name="xeno-canto-lazy",
+        owner="david; gagan",
+        split_paths={
+            "train": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/train_20260203_v2.csv",
+            "validation": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/val_20260203_v2.csv",
+            "all": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/all_20260203_v2.csv",
+            "train_unseen": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/train_unseen_20260203_v2.csv",
+            "validation_unseen": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/val_unseen_20260203_v2.csv",
+            "all_unseen": f"{DATA_HOME}/xeno-canto/v0.1.0/raw/all_unseen_20260203_v2.csv",
+        },
+        version="0.1.0",
+        description="Xeno-canto audio dataset with taxonomic metadata. "
+        "Available at original (variable) sample rates and 32kHz (pre-resampled). "
+        "Pre-resampled audio uses librosa's kaiser_best resampling method. "
+        "Xeno-canto dump as of Oct 2025. "
+        "Train/val split is 90%/10% with random seed 42.",
+        sources=["Xeno-canto"],
+        license="CC BY-NC-SA 4.0, CC BY-NC 4.0, CC BY-SA, CC0",
+    )
 
     def _process(self, row: dict[str, Any]) -> dict[str, Any]:
         """Return the audio path without performing any I/O.

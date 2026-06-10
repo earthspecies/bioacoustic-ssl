@@ -9,6 +9,7 @@ from .utils import (
     LongTailUpsampleTargetConfig,
     MultiLabelFromFeature,
     MultiLabelFromFeatureConfig,
+    compute_sample_weights,
 )
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     "CastConfig",
     "Cast",
     "LongTailUpsampleTarget",
-    "LongTailUpsampleTargetConfig"
+    "LongTailUpsampleTargetConfig",
+    "compute_sample_weights",
 ]

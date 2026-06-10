@@ -31,6 +31,7 @@ class MAE(nn.Module):
         pos_embed_type: str = "sinusoidal_2d",
         decoder_pos_embed_type: str = "sinusoidal_2d",
         rope_base: float = 10000.0,
+        qkv_norm: bool = False,
     ) -> None:
         super().__init__()
         self.patch_size = patch_size
@@ -52,6 +53,7 @@ class MAE(nn.Module):
             grad_checkpoint=grad_checkpoint,
             pos_embed_type=pos_embed_type,
             rope_base=rope_base,
+            qkv_norm=qkv_norm
         )
 
         num_patches = self.encoder.patch_embed.num_patches
@@ -76,6 +78,7 @@ class MAE(nn.Module):
             grad_checkpoint=grad_checkpoint,
             pos_embed_type=decoder_pos_embed_type,
             rope_base=rope_base,
+            qkv_norm=qkv_norm
         )
 
         self._num_features = encoder_embed_dim
@@ -111,7 +114,7 @@ class MAE(nn.Module):
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
-            target = (target - mean) / (var + 1.0e-6) ** 0.5
+            target = (target - mean) / (var + 1.0e-4) ** 0.5
 
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)

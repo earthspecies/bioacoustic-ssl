@@ -5,4 +5,12 @@ defaults:
   - datasets@datasets: train/hsn
 
 weights: null
+
+
+class_weighting:
+  enabled: true
+  label_column: label   # mapped multi-hot label column produced by MultiLabelFromFeature
+  alpha: 0.5            # 0 = uniform (no reweighting), 1 = full inverse-frequency balance
+  seed: ${seed}
+
 num_classes: null

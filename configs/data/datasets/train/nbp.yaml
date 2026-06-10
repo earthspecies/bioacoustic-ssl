@@ -1,4 +1,4 @@
-max_steps: 1250
+max_steps: 3000
 
 train:
   _target_: esp_data.DatasetConfig
@@ -17,7 +17,7 @@ train:
     - _target_: soundscape_ssl.data.FilterFixConfig
       type: filter_fix
       property: gbifID
-      values: &cls [2478259, 2481798, 2482614, 2482803, 2484183, 2487446, 2487825, 2490263, 2490810, 2490935, 2491872, 2494360, 5231132, 5231483, 7341805, 7341834, 8169649, 8255548, 9362842, 9510564, 9761484]
+      values: &cls [8012314, 9317615, 2492949, 5229493, 9705453, 2495000, 2487871, 5229490, 7901064, 2484916, 2490310, 2490604, 2492956, 2490669, 5231190, 7626513, 2490246, 8104397, 2488949, 5845582, 2493091, 5231763, 8077224, 9330514, 2492462, 2487879, 2480537, 9990095, 2487843, 9409796, 2492350, 2494686, 2495708, 2490719, 6093527, 2494422, 7660710, 2494200, 9515886, 2492822, 2493012, 5231438, 2495696, 2477968, 7806848, 9809229, 2492576, 9629160, 2487883, 2494543, 2495455]
     - _target_: soundscape_ssl.data.CastConfig
       type: cast
       property: gbifID
@@ -35,7 +35,7 @@ test:
   _target_: esp_data.DatasetConfig
   dataset_name: birdset
   sample_rate: 32000
-  split: HSN-test_5s
+  split: NBP-test_5s
   output_take_and_give:
     audio: audio
     label: label
@@ -53,4 +53,3 @@ test:
       is_multilabel: True
       feature: gbifID_multispecies
       class_ids: *cls
-

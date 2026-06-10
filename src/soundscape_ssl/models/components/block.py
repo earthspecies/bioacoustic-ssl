@@ -19,11 +19,12 @@ class TransformerBlock(nn.Module):
         norm_eps: float = 1e-6,
         use_checkpoint: bool = False,
         rope: nn.Module | None = None,
+        qkv_norm: bool = False,
     ):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim, eps=norm_eps)
         self.attn = Attention(
-            dim, num_heads, qkv_bias, attn_drop, drop, rope=rope
+            dim, num_heads, qkv_bias, attn_drop, drop, rope=rope, qkv_norm=qkv_norm
         )
         self.norm2 = nn.LayerNorm(dim, eps=norm_eps)
         self.mlp = MLP(

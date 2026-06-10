@@ -1,3 +1,4 @@
+from collections import Counter
 from typing import List, Literal, Any
 
 import polars as pl
@@ -12,6 +13,7 @@ class MultiLabelFromFeatureConfig(BaseModel):
     output_feature: str = "label"
     override: bool = False
     is_multilabel: bool = True
+    class_ids: list[int] | None = None
 
 
 class FilterFixConfig(BaseModel):
@@ -157,6 +159,14 @@ class MultiLabelFromFeature(LabelFromFeature):
 
     Each row's feature value is a list of labels. The label_map maps
     individual label values (not lists) to integer indices.
+
+    When ``class_ids`` is supplied (and no explicit ``label_map`` is given) the
+    label map is built deterministically from that fixed class universe rather
+    than inferred from the data observed in this split. This keeps the index
+    assignment identical across splits, which is required when prototypes built
+    on the train split are evaluated against the test split: a class with no
+    samples in one split still keeps its reserved index instead of shifting all
+    later classes. ``class_ids`` need not be sorted or unique.
     """
 
     def __init__(
@@ -166,8 +176,11 @@ class MultiLabelFromFeature(LabelFromFeature):
         label_map: dict[Any, int] | None = None,
         output_feature: str = "label",
         override: bool = False,
-        is_multilabel: bool = True
+        is_multilabel: bool = True,
+        class_ids: list[int] | None = None,
     ) -> None:
+        if label_map is None and class_ids is not None:
+            label_map = {v: i for i, v in enumerate(sorted(set(class_ids)))}
         super().__init__(feature=feature, label_map=label_map, output_feature=output_feature, override=override)
         self.is_multilabel = is_multilabel
 
@@ -202,6 +215,43 @@ class MultiLabelFromFeature(LabelFromFeature):
         }
 
         return backend.add_column(self.output_feature, mapped), metadata
+
+
+def compute_sample_weights(
+    dataset: Any,
+    label_column: str = "label",
+    alpha: float = 1.0,
+) -> list[float]:
+    """Per-sample weights for a ``WeightedRandomSampler``.
+
+    Weights follow a softened inverse-frequency class distribution
+    (``weight = count ** -alpha``): ``alpha=0`` yields uniform weights
+    (equivalent to plain shuffling), ``alpha=1`` fully balances the classes.
+
+    Train labels are single-element lists; for multi-label safety a sample's
+    weight is the max over its class weights. Samples with no/empty label get
+    weight 0.
+
+    Parameters
+    ----------
+    dataset :
+        A map-style ``esp_data`` dataset exposing its Polars frame via
+        ``dataset._data.unwrap``.
+    label_column :
+        Name of the mapped multi-hot label column (``List[Int64]``).
+    alpha :
+        Softening exponent in ``[0, 1]``.
+    """
+    df = dataset._data.unwrap  # polars DataFrame
+    labels = df[label_column].to_list()  # list[list[int] | None]
+
+    counts: Counter = Counter(c for lst in labels if lst for c in lst)
+    class_w = {c: n ** (-alpha) for c, n in counts.items()}
+
+    return [
+        max((class_w[c] for c in lst), default=0.0) if lst else 0.0
+        for lst in labels
+    ]
 
 
 register_transform(MultiLabelFromFeatureConfig, MultiLabelFromFeature)

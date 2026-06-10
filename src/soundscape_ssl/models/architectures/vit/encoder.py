@@ -22,6 +22,7 @@ class ViTEncoder(nn.Module):
         grad_checkpoint: bool = False,
         pos_embed_type: str = "sinusoidal_2d",
         rope_base: float = 10000.0,
+        qkv_norm: bool = False,
     ) -> None:
         super().__init__()
         self.pos_embed_type = pos_embed_type
@@ -74,6 +75,7 @@ class ViTEncoder(nn.Module):
                 norm_eps=norm_eps,
                 use_checkpoint=grad_checkpoint,
                 rope=self.rope,
+                qkv_norm=qkv_norm
             )
             for i in range(depth)
         ])
