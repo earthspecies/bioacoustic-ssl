@@ -1,10 +1,10 @@
-max_steps: 1500
+max_steps: 1250
 
 train:
-  _target_: esp_data.DatasetConfig
+  _target_: alp_data.DatasetConfig
   dataset_name: xeno-canto-raw
   sample_rate: 32000
-  split: all_unseen
+  split: all
   output_take_and_give:
     audio_bytes: audio_bytes
     label: label
@@ -17,7 +17,7 @@ train:
     - _target_: soundscape_ssl.data.FilterFixConfig
       type: filter_fix
       property: gbifID
-      values: &cls [8346110, 2473861, 8351644, 2494524, 8077224, 8323485, 5227919, 6100996, 5231398, 9300456, 5227993, 2486699, 2480528, 2493479, 5231615, 5228080, 2490384, 9606290, 2474029, 2494136, 5231614, 2493660, 2481449, 2482001, 5231618, 5232445, 2490851]
+      values: &cls [2478259, 2481798, 2482614, 2482803, 2484183, 2487446, 2487825, 2490263, 2490810, 2490935, 2491872, 2494360, 5231132, 5231483, 7341805, 7341834, 8169649, 8255548, 9362842, 9510564, 9761484]
     - _target_: soundscape_ssl.data.CastConfig
       type: cast
       property: gbifID
@@ -32,10 +32,10 @@ train:
       class_ids: *cls
 
 test:
-  _target_: esp_data.DatasetConfig
+  _target_: alp_data.DatasetConfig
   dataset_name: birdset
   sample_rate: 32000
-  split: UHH-test_5s
+  split: HSN-test_5s
   output_take_and_give:
     audio: audio
     label: label
@@ -53,3 +53,4 @@ test:
       is_multilabel: True
       feature: gbifID_multispecies
       class_ids: *cls
+

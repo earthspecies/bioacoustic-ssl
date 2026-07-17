@@ -11,6 +11,7 @@
   _stage_: [train, test]
 - _target_: soundscape_ssl.data.transforms.MultiHotEncoder
   num_classes: ${data.num_classes}
+  _stage_: [train, test]
 - _target_: soundscape_ssl.data.transforms.MeanMix
   p: 0.9
   max_samples: 3

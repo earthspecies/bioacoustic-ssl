@@ -17,9 +17,9 @@ import httpx
 import librosa
 import numpy as np
 import torchaudio
-from esp_data import Dataset, DatasetConfig, DatasetInfo
-from esp_data.backends import BackendType, get_backend
-from esp_data.io import audio_stereo_to_mono
+from alp_data import Dataset, DatasetConfig, DatasetInfo
+from alp_data.backends import BackendType, get_backend
+from alp_data.io import audio_stereo_to_mono
 
 __all__ = ["A2OSite", "A2ODetections"]
 

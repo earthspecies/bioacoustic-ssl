@@ -2,16 +2,16 @@
 
 from typing import Any
 
-from esp_data import DatasetInfo, register_dataset
-from esp_data.datasets import XenoCanto
-from esp_data.io import DATA_HOME, anypath, filesystem_from_path
+from alp_data import DatasetInfo, register_dataset
+from alp_data.datasets import XenoCanto
+from alp_data.io import DATA_HOME, anypath, filesystem_from_path
 
 
 @register_dataset
 class XenoCantoRaw(XenoCanto):
     """XenoCanto dataset that returns raw compressed bytes instead of decoded audio.
 
-    Extends :class:`~esp_data.datasets.XenoCanto` by skipping the decode step
+    Extends :class:`~alp_data.datasets.XenoCanto` by skipping the decode step
     in :meth:`_process`.  Each sample contains::
 
         {
@@ -38,9 +38,9 @@ class XenoCantoRaw(XenoCanto):
     Parameters
     ----------
     *args :
-        Forwarded verbatim to :class:`~esp_data.datasets.XenoCanto`.
+        Forwarded verbatim to :class:`~alp_data.datasets.XenoCanto`.
     **kwargs :
-        Forwarded verbatim to :class:`~esp_data.datasets.XenoCanto`.
+        Forwarded verbatim to :class:`~alp_data.datasets.XenoCanto`.
 
     Examples
     --------
@@ -152,7 +152,7 @@ class XenoCantoRaw(XenoCanto):
 class XenoCantoLazy(XenoCanto):
     """XenoCanto dataset that defers all I/O to the transform pipeline.
 
-    Extends :class:`~esp_data.datasets.XenoCanto` so that :meth:`_process`
+    Extends :class:`~alp_data.datasets.XenoCanto` so that :meth:`_process`
     returns the **path** to the audio file rather than its content.  Each
     sample contains::
 
@@ -190,9 +190,9 @@ class XenoCantoLazy(XenoCanto):
     Parameters
     ----------
     *args :
-        Forwarded verbatim to :class:`~esp_data.datasets.XenoCanto`.
+        Forwarded verbatim to :class:`~alp_data.datasets.XenoCanto`.
     **kwargs :
-        Forwarded verbatim to :class:`~esp_data.datasets.XenoCanto`.
+        Forwarded verbatim to :class:`~alp_data.datasets.XenoCanto`.
 
     Examples
     --------

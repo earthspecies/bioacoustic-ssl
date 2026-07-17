@@ -111,11 +111,19 @@ class ViTEncoder(nn.Module):
         self,
         x: torch.Tensor,
         mask_ratio: float | None = None,
-    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return_hidden: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor] | list[torch.Tensor]:
         """
         mask_ratio=None  → standard ViT forward, returns latent (B, N+1, D)
         mask_ratio given → MAE forward, returns (latent, mask, ids_restore)
                            where latent is (B, len_keep+1, D)
+
+        return_hidden=True → instead of the final-layer latent, return the list
+            of per-block hidden states ``[h_1, ..., h_depth]`` (each
+            ``(B, N+1, D)``, raw block outputs *before* the final ``self.norm``).
+            Used for layerwise probing, where the best transferable features may
+            live in a middle layer rather than the last. When combined with
+            ``mask_ratio`` the return is ``(hidden_states, mask, ids_restore)``.
         """
         B = x.shape[0]
         x = self.patch_embed(x)  # (B, N, D)
@@ -145,10 +153,20 @@ class ViTEncoder(nn.Module):
             ], dim=1)
 
         x = self.pos_drop(x)
+        hidden_states: list[torch.Tensor] = []
         for blk in self.blocks:
             x = blk(x, pos_ids=pos_ids)
-        x = self.norm(x)
+            if return_hidden:
+                hidden_states.append(x)
 
+        if return_hidden:
+            # Skip the final shared self.norm: it is specialised for the last
+            # layer, so the layerwise head normalises each layer on its own.
+            if mask_ratio is not None:
+                return hidden_states, mask, ids_restore
+            return hidden_states
+
+        x = self.norm(x)
         if mask_ratio is not None:
             return x, mask, ids_restore
         return x

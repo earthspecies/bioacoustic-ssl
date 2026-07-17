@@ -2,8 +2,8 @@ from collections import Counter
 from typing import List, Literal, Any
 
 import polars as pl
-from esp_data.backends import DataBackend, PolarsBackend
-from esp_data.transforms import LabelFromFeature, register_transform, Filter, LongTailUpsample
+from alp_data.backends import DataBackend, PolarsBackend
+from alp_data.transforms import LabelFromFeature, register_transform, Filter, LongTailUpsample
 from pydantic import BaseModel
 
 
@@ -235,7 +235,7 @@ def compute_sample_weights(
     Parameters
     ----------
     dataset :
-        A map-style ``esp_data`` dataset exposing its Polars frame via
+        A map-style ``alp_data`` dataset exposing its Polars frame via
         ``dataset._data.unwrap``.
     label_column :
         Name of the mapped multi-hot label column (``List[Int64]``).

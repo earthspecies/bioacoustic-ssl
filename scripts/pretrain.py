@@ -17,16 +17,15 @@ Resume from checkpoint:
         trainer.resume_from_checkpoint=/path/to/epoch_0010.ckpt
 """
 
-import os
-os.environ["HF_HOME"] = "/home/moritz_earthspecies_org/.cache/huggingface"
-os.environ["HF_DATASETS_CACHE"] = "/home/moritz_earthspecies_org/.cache/datasets"
-os.environ["HF_HUB_CACHE"] = "/home/moritz_earthspecies_org/.cache/hub"
+from dotenv import load_dotenv
+load_dotenv()  # load repo .env (secrets, HF cache, CA bundle) before other imports
 
 import hydra
 import torch
 from lightning.fabric import Fabric
 from omegaconf import DictConfig, OmegaConf
 
+from soundscape_ssl.data import cleanup_all
 from soundscape_ssl.training.mae_pretrainer import pretrain
 
 
@@ -41,7 +40,10 @@ def main(cfg: DictConfig) -> None:
         strategy=cfg.trainer.strategy,
         precision=cfg.trainer.precision,
     )
-    fabric.launch(pretrain, cfg)
+    try:
+        fabric.launch(pretrain, cfg)
+    finally:
+        cleanup_all()
 
 
 if __name__ == "__main__":

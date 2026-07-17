@@ -5,7 +5,7 @@ import tempfile
 import numpy as np
 import soundfile as sf
 import torch
-from esp_data.io.read_utils import get_audio_info, read_audio_by_time
+from alp_data.io.read_utils import get_audio_info, read_audio_by_time
 from soundfile import LibsndfileError
 
 from soundscape_ssl.data.transforms.base import Transform
@@ -81,10 +81,11 @@ class TimeShift(Transform):
             return sample
         audio = sample[self.audio_key]
         T = audio.shape[-1]
-        if T <= self.output_length:
+        output_length = int(self.output_length * self.sample_rate)
+        if T <= output_length:
             return sample
-        start = int(torch.randint(0, T - self.output_length, (1,)).item())
-        return {**sample, self.audio_key: audio[..., start : start + self.output_length]}
+        start = int(torch.randint(0, T - output_length, (1,)).item())
+        return {**sample, self.audio_key: audio[..., start : start + output_length]}
 
     # ------------------------------------------------------------------
     # Lazy / path mode – true partial download via HTTP Range requests
@@ -104,7 +105,7 @@ class TimeShift(Transform):
             Must contain:
 
             ``"audio_path"``
-                Path string understood by :func:`~esp_data.io.filesystem_from_path`
+                Path string understood by :func:`~alp_data.io.filesystem_from_path`
                 (local path, ``gs://…``, ``s3://…``).
             ``"audio_format"`` *(optional)*
                 Format hint (e.g. ``"FLAC"``).  Not strictly required for path
@@ -125,6 +126,12 @@ class TimeShift(Transform):
         start_secs = random.uniform(0, max(info["duration"] - self.output_length, 0.0))
 
         audio, sr = read_audio_by_time(audio_path, start_time=start_secs, end_time=start_secs + self.output_length)
+
+        # get_audio_info can overestimate duration for VBR files (e.g. MP3), so
+        # the window may land past the true EOF and decode to zero frames. Retry
+        # from the start, which yields real audio for any decodable file.
+        if audio.size == 0 and start_secs > 0.0:
+            audio, sr = read_audio_by_time(audio_path, start_time=0.0, end_time=self.output_length)
 
         target_sr: int | None = self.sample_rate or info["sr"]
 
@@ -181,11 +188,10 @@ class TimeShift(Transform):
             total_frames, native_sr = self._info_via_tmpfile(audio_bytes, audio_format)
 
         # ---- 2. crop dimensions in *native* frame space -------------------
-        if target_sr and target_sr != native_sr:
-            # output_length is at target_sr; convert duration to native frames
-            native_output_frames = int(self.output_length * native_sr / target_sr)
-        else:
-            native_output_frames = int(self.output_length * native_sr)
+        # output_length is a duration in seconds; the window to read in native
+        # frame space is that duration times the native sample rate, regardless
+        # of the target rate (resampling happens after decode).
+        native_output_frames = int(self.output_length * native_sr)
 
         # ---- 3. random start, decode only the window ----------------------
         if total_frames <= native_output_frames:
@@ -243,7 +249,7 @@ class TimeShift(Transform):
             import librosa  # deferred import – not always needed
             audio = librosa.resample(
                 y=audio, orig_sr=native_sr, target_sr=target_sr,
-                scale=True, res_type="kaiser_best",
+                scale=True, res_type="soxr_hq",
             )
 
         return torch.from_numpy(np.ascontiguousarray(audio))

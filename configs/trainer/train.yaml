@@ -7,6 +7,6 @@ validate_amount: 15
 grad_clip: 2.0
 log_every_n_steps: 1
 save_every_n_steps: 500000
-resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC.ckpt # XC # 2026-06-05/12-15-53
-#resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_terrestrial.ckpt # XC + terrestrial # 2026-06-05/18-02-48
+resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt # XC # 2026-06-05/12-15-53
+#resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terrestrial.ckpt # XC + terrestrial # 2026-06-05/18-02-48
 

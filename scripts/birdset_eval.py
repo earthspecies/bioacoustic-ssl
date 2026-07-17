@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()  # load repo .env (secrets, HF cache, CA bundle) before other imports
 import logging
 import multiprocessing as mp
 import random
@@ -9,9 +11,11 @@ import hydra
 import torch
 import torch.nn as nn
 import wandb
-from esp_data import dataset_from_config
-import esp_data.io
-import esp_data
+from alp_data import dataset_from_config
+import pandas as pd
+import tenacity
+import alp_data.io
+import alp_data
 import aioitertools
 from lightning.fabric.fabric import Fabric
 import huggingface_hub
@@ -23,7 +27,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 
-from soundscape_ssl.data import Compose, compute_sample_weights
+from soundscape_ssl.data import CachedDataset, Compose, cleanup_all, compute_sample_weights, open_run_cache
 from soundscape_ssl.models import ViTClassifier, ViTProtoFloat
 from soundscape_ssl.models.utils.lr_decay import param_groups_lrd
 from soundscape_ssl.training.lr_scheduler import CosineWarmupScheduler
@@ -44,6 +48,8 @@ def hydra_main(cfg: DictConfig) -> None:
     except Exception:
         traceback.print_exc()
         raise
+    finally:
+        cleanup_all()
 
 
 def main(fabric: Fabric, cfg: DictConfig) -> None:
@@ -54,8 +60,15 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
 
     train_dataset, train_meta = dataset_from_config(instantiate(cfg.data.datasets["train"]))
     test_dataset, test_meta = dataset_from_config(instantiate(cfg.data.datasets["test"]))
-    cfg.data.num_classes = test_meta["mulitlabel_from_feature"]["num_classes"]
+    cfg.data.num_classes = test_meta["mulitlabel_from_feature"]["num_classes"] if "mulitlabel_from_feature" in test_meta else test_meta["label_from_feature"]["num_classes"]
 
+    cache_cfg = cfg.data.get("cache", None)
+    if cache_cfg is not None and cache_cfg.get("enabled", False):
+        cache = open_run_cache(cache_cfg.get("dir"), cache_cfg.get("size_limit_gb", 50))
+        train_dataset = CachedDataset(train_dataset, cache, "train")
+        test_dataset = CachedDataset(test_dataset, cache, "test")
+
+    # warmup loaders
     if fabric.is_global_zero:
         _ = train_dataset[0]
         _ = test_dataset[0]
@@ -156,7 +169,7 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
                         run)
 
     if fabric.is_global_zero:
-        _save_checkpoint(fabric, model, optimizer, scheduler, global_step, cfg)
+        # _save_checkpoint(fabric, model, optimizer, scheduler, global_step, cfg)
         log.info("Training complete.")
         run.finish()
 
@@ -196,7 +209,7 @@ def train(fabric: Fabric,
                 outputs = model(batch["spectrogram"])
                 label = batch["label"]
 
-            loss = criterion(x=outputs, y=label)
+            loss = criterion(outputs, label)
             fabric.backward(loss)
             fabric.clip_gradients(model, optimizer, max_norm=cfg.trainer.grad_clip)
             optimizer.step()
@@ -217,13 +230,35 @@ def train(fabric: Fabric,
                 validate(fabric, model, test_loader, criterion, test_metrics, run, global_step)
                 model.train()
 
-            if fabric.is_global_zero and global_step % save_every == 0:
-                _save_checkpoint(fabric, model, optimizer, scheduler, global_step, cfg)
+            #if fabric.is_global_zero and global_step % save_every == 0:
+                #_save_checkpoint(fabric, model, optimizer, scheduler, global_step, cfg)
 
             if global_step >= max_steps:
                 break
 
     return global_step
+
+
+@torch.no_grad()
+def _log_layer_weights(model: nn.Module, run: wandb.Run, global_step: int) -> None:
+    """Log the learned layerwise-probing weights for ViTProtoLayerwise.
+
+    Logs the softmax-normalised per-layer weight (how much the probe relies on
+    each transformer block) plus a single summary scalar — the softmax-weighted
+    mean layer index — so the layer profile is captured per run. No-op for any
+    other head, so it is safe to call unconditionally.
+    """
+    layer_weights = getattr(model, "layer_weights", None)
+    if layer_weights is None:
+        return
+
+    w = torch.softmax(layer_weights.detach().float(), dim=0).cpu()
+    layers = torch.arange(1, w.numel() + 1, dtype=w.dtype)
+    centroid = float((w * layers).sum())  # 1-indexed; ~last layer if mass is late
+    run.log({
+        **{f"layer_weights/block_{i + 1:02d}": float(v) for i, v in enumerate(w)},
+        "layer_weights/centroid": centroid,
+    }, step=global_step)
 
 
 @torch.no_grad()
@@ -240,7 +275,7 @@ def validate(fabric: Fabric,
             preds = model(batch["spectrogram"])
             targets: torch.Tensor = batch["label"]
 
-        loss = criterion(x=preds, y=targets)
+        loss = criterion(preds, targets)
         for metric in metrics:
             metric.update(preds.cpu(), targets.int().cpu())
 
@@ -248,6 +283,7 @@ def validate(fabric: Fabric,
         run.log({"test/loss": loss.item(),
                  **{f"test/{metric.__class__.__name__}": metric.compute() for metric in metrics}},
                  step=global_step)
+        _log_layer_weights(model, run, global_step)
 
     for metric in metrics:
         metric.reset()
@@ -291,7 +327,7 @@ def _load_checkpoint(
 
 def worker_init_fn(worker_id: int) -> None:
     # Each worker sleeps 0–1.5 s based on its worker ID + randomness
-    time.sleep(worker_id * 0.2 + random.uniform(0, 0.5))
+    time.sleep(random.uniform(0, 5))
 
 
 def build_stages_list(cfg_list: ListConfig | list, stage: str) -> list:   # stage: "train", "val", or "test"

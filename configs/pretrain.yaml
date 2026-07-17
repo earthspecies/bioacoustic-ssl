@@ -3,6 +3,7 @@ defaults:
   - _self_
   - data: pretrain
   - module: mae
+  - experiment: null
   - paths: default
   - trainer: pretrain
 

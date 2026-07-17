@@ -58,15 +58,21 @@ are aggregated daily/hourly/minute presence products (``*_1d``, ``*_1h``,
 What remains is true-span events (e.g. ``bocaccio``, ``plainfinmidshipman``,
 ``killerwhale``, ``atlanticcod``, ``pinnipeds``) and fine-grained point
 detections (``bluewhale``); negative rows (``Presence == 0``) are dropped.
+Some true-span detectors (``killerwhale``, ``plainfinmidshipman``,
+``pinnipeds``) mark multi-hour — occasionally multi-day — *presence intervals*
+rather than single calls; events whose span exceeds ``NOAA.max_event_seconds``
+(default 60 s) are dropped at load time, so every retained event is a localised
+detection.
 
 Audio loading
 -------------
-Audio is read lazily with :func:`esp_data.io.read_audio_by_time`, which issues
+Audio is read lazily with :func:`alp_data.io.read_audio_by_time`, which issues
 HTTP ``Range`` requests against GCS and therefore downloads only the FLAC
 header plus the requested window — never the full multi-hour file.
 """
 
 import bisect
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -77,10 +83,12 @@ import gcsfs
 import librosa
 import numpy as np
 import pandas as pd
-from esp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
-from esp_data.backends import BackendType
-from esp_data.io import audio_stereo_to_mono
-from esp_data.io.read_utils import get_audio_info, read_audio_by_time
+from alp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
+from alp_data.backends import BackendType
+from alp_data.io import audio_stereo_to_mono
+from alp_data.io.read_utils import get_audio_info, read_audio_by_time
+
+logger = logging.getLogger(__name__)
 
 _GCS_ROOT = "gs://noaa-passive-bioacoustic"
 
@@ -540,6 +548,24 @@ class NOAA(Dataset):
     clip_duration : float or None, default=5.0
         Length (seconds) of the clip returned per event, centred on the event
         midpoint.  When ``None``, the exact event span is returned instead.
+    max_event_seconds : float or None, default=60.0
+        Maximum annotated event span (seconds); events whose span exceeds this
+        are dropped at load time.  Multi-hour — occasionally multi-day —
+        presence-interval detectors (e.g. SanctSound's ``killerwhale`` /
+        ``plainfinmidshipman`` / ``pinnipeds``) mark presence over a window
+        rather than a localised call, so a fixed clip cannot reliably contain
+        the sound (and centring on the span midpoint would read past the file's
+        EOF).  Excluding them keeps every retained event a localised detection.
+        ``None`` disables the filter (keep all events, including over-long ones).
+    min_event_gap_seconds : float or None, default=60.0
+        Minimum spacing (seconds) between kept events within one audio
+        recording.  Detectors log calls note-by-note, so consecutive events are
+        often a fraction of a second apart (e.g. SanctSound ``bluewhale``: 99%
+        within 5 s), producing near-identical overlapping clips that dominate
+        and add little for SSL.  Events are de-duplicated greedily per recording
+        — keeping an event only if its onset is at least this many seconds after
+        the last kept one — which both removes redundancy and rebalances away
+        from over-represented detectors.  ``None`` disables de-duplication.
     prefer_highres : bool, default=True
         When ``True`` and the split defines a ``variant_resolver``, each event is
         served from the highest-resolution product available for its recording
@@ -598,6 +624,8 @@ class NOAA(Dataset):
         output_take_and_give: dict[str, str] | None = None,
         sample_rate: int | None = None,
         clip_duration: float | None = 5.0,
+        max_event_seconds: float | None = None,
+        min_event_gap_seconds: float | None = None,
         prefer_highres: bool = True,
         backend: BackendType = "polars",
         streaming: bool = False,
@@ -606,6 +634,8 @@ class NOAA(Dataset):
         self.split = split
         self.sample_rate = sample_rate
         self.clip_duration = clip_duration
+        self.max_event_seconds = max_event_seconds
+        self.min_event_gap_seconds = min_event_gap_seconds
         self.prefer_highres = prefer_highres
         self._spec: _NOAASplit | None = None
         self._annotation_columns: list[str] = []
@@ -711,6 +741,42 @@ class NOAA(Dataset):
         event_start = df["event_start_seconds"]
         event_end = df["event_end_seconds"]
 
+        # Drop over-long events whose annotated span exceeds the cutoff.  Some
+        # SanctSound detectors (e.g. killerwhale, plainfinmidshipman, pinnipeds)
+        # mark multi-hour — occasionally multi-day — *presence intervals* rather
+        # than localised calls; a fixed clip cannot reliably contain the sound,
+        # and centring on the span midpoint would land past the file's EOF
+        # (empty reads).  Excluding them keeps every retained event a localised
+        # detection.
+        if self.max_event_seconds is not None:
+            keep = (event_end - event_start) <= self.max_event_seconds
+            df = df[keep].reset_index(drop=True)
+            event_start = df["event_start_seconds"]
+            event_end = df["event_end_seconds"]
+
+        # Temporal de-duplication: detectors log calls note-by-note, so within a
+        # single recording consecutive events are often a fraction of a second
+        # apart (e.g. SanctSound bluewhale: 99% within 5 s), yielding near-
+        # identical overlapping clips that dominate and add little for SSL.
+        # Greedily keep, per audio recording, only events whose onset is at
+        # least ``min_event_gap_seconds`` after the last kept one.
+        if self.min_event_gap_seconds is not None and len(df):
+            group_col = "audio_path" if "audio_path" in df.columns else self._spec.path_column
+            df = df.sort_values([group_col, "event_start_seconds"], kind="stable")
+            gap = self.min_event_gap_seconds
+            last: dict[Any, float] = {}
+            keep_mask: list[bool] = []
+            for grp, onset in zip(df[group_col].to_numpy(), df["event_start_seconds"].to_numpy()):
+                prev = last.get(grp)
+                if prev is None or onset - prev >= gap:
+                    keep_mask.append(True)
+                    last[grp] = onset
+                else:
+                    keep_mask.append(False)
+            df = df[keep_mask].reset_index(drop=True)
+            event_start = df["event_start_seconds"]
+            event_end = df["event_end_seconds"]
+
         if self.clip_duration is None:
             df["start_seconds"] = event_start
             df["end_seconds"] = event_end
@@ -724,10 +790,11 @@ class NOAA(Dataset):
 
     @classmethod
     def from_config(cls, dataset_config: DatasetConfig) -> tuple["NOAA", dict[str, Any]]:
-        """Create a dataset instance from a :class:`~esp_data.DatasetConfig`.
+        """Create a dataset instance from a :class:`~alp_data.DatasetConfig`.
 
-        ``clip_duration`` and ``prefer_highres`` are read from the config's
-        extra fields when present, otherwise the constructor defaults are used.
+        ``clip_duration``, ``max_event_seconds``, ``min_event_gap_seconds`` and
+        ``prefer_highres`` are read from the config's extra fields when present,
+        otherwise the constructor defaults are used.
         """
         cfg = dataset_config.model_dump(exclude={"dataset_name", "transformations"})
         ds = cls(
@@ -735,6 +802,8 @@ class NOAA(Dataset):
             output_take_and_give=cfg["output_take_and_give"],
             sample_rate=cfg["sample_rate"],
             clip_duration=cfg.get("clip_duration", 5.0),
+            max_event_seconds=cfg.get("max_event_seconds", 60.0),
+            min_event_gap_seconds=cfg.get("min_event_gap_seconds", 60.0),
             prefer_highres=cfg.get("prefer_highres", True),
             backend=cfg["backend"],
             streaming=cfg["streaming"],
@@ -765,7 +834,7 @@ class NOAA(Dataset):
             float(event["end_seconds"]),
         )
 
-    def _process(self, event: dict[str, Any]) -> dict[str, Any]:
+    def _process(self, event: dict[str, Any]) -> dict[str, Any] | None:
         """Load and process the audio clip for a single detection event.
 
         Parameters
@@ -776,10 +845,12 @@ class NOAA(Dataset):
 
         Returns
         -------
-        dict[str, Any]
+        dict[str, Any] or None
             All annotation columns plus the standard audio keys (see the class
             docstring).  If ``output_take_and_give`` was set, only the remapped
-            keys are returned.
+            keys are returned.  ``None`` if the event's clip window decoded to
+            zero samples (e.g. it lands past the audio file's EOF), signalling
+            the caller to skip this event.
         """
         spec = self._spec
         if spec.resolver is not None:
@@ -794,13 +865,27 @@ class NOAA(Dataset):
         audio = audio.astype(np.float32)
         audio = audio_stereo_to_mono(audio, mono_method="average")
 
+        # The clip window is centred on the event and clamped only on the low
+        # end (see _load), so an event whose offset lands at/after the file's
+        # EOF yields a 0-sample read. Skip these rather than crash downstream
+        # (e.g. librosa.resample rejects length-0 input). The caller draws
+        # another sample in place of the dropped one.
+        if audio.size == 0:
+            logger.warning(
+                "Empty audio read for %s [%.3f, %.3f]s; skipping event.",
+                audio_path,
+                start_s,
+                end_s,
+            )
+            return None
+
         if self.sample_rate is not None and sr != self.sample_rate:
             audio = librosa.resample(
                 y=audio,
                 orig_sr=sr,
                 target_sr=self.sample_rate,
                 scale=True,
-                res_type="kaiser_best",
+                res_type="soxr_hq",
             )
             sr = self.sample_rate
 
@@ -836,8 +921,11 @@ class NOAA(Dataset):
             )
         return len(self._events)
 
-    def __getitem__(self, idx: int) -> dict[str, Any]:
-        """Return the processed clip for the event at position ``idx``."""
+    def __getitem__(self, idx: int) -> dict[str, Any] | None:
+        """Return the processed clip for the event at position ``idx``.
+
+        ``None`` if the event decoded to zero samples (see :meth:`_process`).
+        """
         if self._streaming:
             raise NotImplementedError(
                 "Indexed access is not available in streaming mode. Iterate instead."
@@ -845,9 +933,14 @@ class NOAA(Dataset):
         return self._process(self._events[idx])
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
-        """Iterate over all detection events, yielding one clip each."""
+        """Iterate over all detection events, yielding one clip each.
+
+        Events that decode to zero samples (see :meth:`_process`) are skipped.
+        """
         for event in self._events:
-            yield self._process(event)
+            sample = self._process(event)
+            if sample is not None:
+                yield sample
 
     def __str__(self) -> str:
         return (

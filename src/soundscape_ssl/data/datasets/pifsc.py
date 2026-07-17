@@ -15,7 +15,7 @@ This subclass is a convenience wrapper that defaults to the PIFSC split; it is
 exactly equivalent to ``NOAA(split="PIFSC-10", ...)``.
 """
 
-from esp_data import DatasetInfo, register_dataset
+from alp_data import DatasetInfo, register_dataset
 
 from .noaa import _GCS_ROOT, NOAA
 

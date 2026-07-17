@@ -1,0 +1,8 @@
+# @package data.datasets.nasa_bioscape_events
+
+_target_: soundscape_ssl.data.datasets.NASAEarthAccess
+split: BIOSCAPE_EVENTS
+sample_rate: 32000
+output_take_and_give:
+  audio: audio
+  sample_rate: sample_rate

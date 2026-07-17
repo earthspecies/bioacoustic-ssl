@@ -1,10 +1,10 @@
-max_steps: 3000
+max_steps: 2800
 
 train:
-  _target_: esp_data.DatasetConfig
+  _target_: alp_data.DatasetConfig
   dataset_name: xeno-canto-raw
   sample_rate: 32000
-  split: all_unseen
+  split: all
   output_take_and_give:
     audio_bytes: audio_bytes
     label: label
@@ -17,7 +17,7 @@ train:
     - _target_: soundscape_ssl.data.FilterFixConfig
       type: filter_fix
       property: gbifID
-      values: &cls [8012314, 9317615, 2492949, 5229493, 9705453, 2495000, 2487871, 5229490, 7901064, 2484916, 2490310, 2490604, 2492956, 2490669, 5231190, 7626513, 2490246, 8104397, 2488949, 5845582, 2493091, 5231763, 8077224, 9330514, 2492462, 2487879, 2480537, 9990095, 2487843, 9409796, 2492350, 2494686, 2495708, 2490719, 6093527, 2494422, 7660710, 2494200, 9515886, 2492822, 2493012, 5231438, 2495696, 2477968, 7806848, 9809229, 2492576, 9629160, 2487883, 2494543, 2495455]
+      values: &cls [2491205, 2490872, 9606290, 2490384, 2487805, 2487887, 2489590, 6092631, 2490810, 2489613, 2484391, 2480328, 2482507, 2478106, 5232437, 2487456, 2482593, 2484597, 6093862, 2478259, 9409198, 2484892, 9192501, 2480529, 2482492, 6093586, 2488517, 2489985, 2490494, 2487430, 6093374, 2490821, 9581157, 9149595, 6093202, 2484340, 2484609, 6092942, 7531611, 6093846, 2489670, 2487596, 2493801, 9510564, 5228824, 2496287, 5229734, 2490804]
     - _target_: soundscape_ssl.data.CastConfig
       type: cast
       property: gbifID
@@ -32,10 +32,10 @@ train:
       class_ids: *cls
 
 test:
-  _target_: esp_data.DatasetConfig
+  _target_: alp_data.DatasetConfig
   dataset_name: birdset
   sample_rate: 32000
-  split: NBP-test_5s
+  split: POW-test_5s
   output_take_and_give:
     audio: audio
     label: label

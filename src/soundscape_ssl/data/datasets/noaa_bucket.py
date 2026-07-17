@@ -16,9 +16,9 @@ import gcsfs
 import librosa
 import numpy as np
 import pandas as pd
-from esp_data import Dataset, DatasetConfig, DatasetInfo
-from esp_data.backends import BackendType, get_backend
-from esp_data.io import audio_stereo_to_mono, read_audio
+from alp_data import Dataset, DatasetConfig, DatasetInfo
+from alp_data.backends import BackendType, get_backend
+from alp_data.io import audio_stereo_to_mono, read_audio
 
 __all__ = ["NOAABucket", "NOAABucketDetections", "NOAASanctSound"]
 

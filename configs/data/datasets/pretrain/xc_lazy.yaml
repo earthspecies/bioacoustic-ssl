@@ -1,6 +1,7 @@
 # @package data.datasets.xc
 
 _target_: soundscape_ssl.data.datasets.xeno_canto.XenoCantoLazy
+split: all
 sample_rate: 32000
 output_take_and_give:
   audio_path: audio_path

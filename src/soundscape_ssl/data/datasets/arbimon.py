@@ -3,32 +3,33 @@
 from __future__ import annotations
 
 import io
-import itertools
 import os
 import time
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterator, Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Iterator, Protocol, Sequence
 
 import httpx
 import librosa
 import numpy as np
-from esp_data import Dataset, DatasetConfig, DatasetInfo
-from esp_data.backends import BackendType, get_backend
-from esp_data.io import audio_stereo_to_mono
-from esp_data.io.read_utils import _read_audio_from_file
+import requests
+from alp_data import Dataset, DatasetConfig, DatasetInfo
+from alp_data.backends import BackendType, get_backend
+from alp_data.io import audio_stereo_to_mono
+from alp_data.io.read_utils import _read_audio_from_file
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-__all__ = ["Arbimon", "ArbimonDetections"]
+if TYPE_CHECKING:
+    from rfcx import Client as _RfcxClient
+
+__all__ = ["Arbimon", "ArbimonLegacy", "ArbimonDetections"]
 
 _API_BASE = "https://api.rfcx.org"
 _AUTH_BASE = "https://auth.rfcx.org"
 _AUDIENCE = "https://rfcx.org"
 _SCOPE = "openid email profile offline_access"
 # Public web-app client ID used by the RFCx SDK for device-flow auth.
-_DEFAULT_CLIENT_ID = "LS4dJlP8J2iOBr2snzm6N8I5u7FLSUGd"
+_DEFAULT_CLIENT_ID = "LS4dJlP8J2iOBr2snzm6N8I5u7FLSUG"
 _DEFAULT_CREDENTIALS_FILE = Path("~/.rfcx_credentials")
 _PAGE_SIZE = 1000
 _EARLIEST_DATE = "2000-01-01T00:00:00.000Z"
@@ -496,12 +497,550 @@ class _ArbimonMixin:
 
 
 # ---------------------------------------------------------------------------
+# Official RFCx SDK auth + in-memory fetch mixin
+# ---------------------------------------------------------------------------
+
+
+class _RfcxClientMixin:
+    """Shared authentication and in-memory audio fetch via the official rfcx SDK.
+
+    Subclasses must initialise the following instance attributes before
+    calling any instance method:
+
+    * ``_client`` — authenticated :class:`rfcx.Client`
+    * ``_credentials_file`` — :class:`~pathlib.Path` to the token cache
+    * ``_token`` — current bearer token (``self._client.credentials.token``)
+    * ``_session`` — shared :class:`requests.Session`
+    """
+
+    _client: _RfcxClient
+    _credentials_file: Path
+    _token: str
+    _session: requests.Session
+
+    @staticmethod
+    def _make_client(
+        client_id: str | None,
+        client_secret: str | None,
+        credentials_file: Path,
+    ) -> _RfcxClient:
+        """Create and authenticate an official ``rfcx.Client``.
+
+        Explicit ``client_id`` / ``client_secret`` are exported to the
+        environment because the SDK reads credentials only from env vars and
+        the persisted token file.
+
+        Returns
+        -------
+        rfcx.Client
+            An authenticated client.
+        """
+        if client_id:
+            os.environ["AUTH0_CLIENT_ID"] = client_id
+        if client_secret:
+            os.environ["AUTH0_CLIENT_SECRET"] = client_secret
+        from rfcx import Client as _RfcxClient
+
+        client = _RfcxClient()
+        client.authenticate(
+            persist=True, persisted_credentials_path=str(credentials_file)
+        )
+        return client
+
+    @staticmethod
+    def _parse_rfcx_timestamp(ts: str) -> datetime:
+        """Parse an RFCx ISO-8601 timestamp string to a UTC-aware datetime.
+
+        Returns
+        -------
+        datetime
+            UTC-aware datetime.
+        """
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+    def _refresh_token(self) -> None:
+        """Re-authenticate via the SDK and update the cached bearer token.
+
+        The SDK's ``authenticate`` refreshes from the persisted refresh
+        token (device flow) or fetches a new machine token, so this handles
+        both auth modes without user interaction.
+        """
+        self._client.authenticate(
+            persist=True, persisted_credentials_path=str(self._credentials_file)
+        )
+        self._token = self._client.credentials.token
+
+    def _auth_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self._token}",
+            "Content-Type": "application/json",
+        }
+
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        reraise=True,
+    )
+    def _fetch_segment_bytes(self, stream_id: str, seg_start: str) -> bytes:
+        """Fetch one segment's audio bytes in memory via the RFCx file endpoint.
+
+        Mirrors the official SDK's authenticated download request (same URL,
+        headers, and ``stream=True`` redirect handling) but returns the bytes
+        instead of writing them to disk.  On a 401 the token is refreshed once
+        and the request retried.
+
+        Returns
+        -------
+        bytes
+            The raw FLAC bytes of the segment.
+        """
+        import rfcx._api_rfcx as _rfcx_api
+
+        start_str = seg_start if seg_start.endswith("Z") else seg_start + "Z"
+        url = f"{_rfcx_api.base_url}/streams/{stream_id}/segments/{start_str}/file"
+        params = {"file_extension": "flac"}
+        resp = self._session.get(
+            url, headers=self._auth_headers(), params=params, stream=True
+        )
+        if resp.status_code == 401:
+            self._refresh_token()
+            resp = self._session.get(
+                url, headers=self._auth_headers(), params=params, stream=True
+            )
+        resp.raise_for_status()
+        return resp.content
+
+    def _get_stream_meta(self, stream_id: str) -> dict[str, Any]:
+        """Fetch stream metadata, refreshing the token once on failure.
+
+        Calls :func:`rfcx._api_rfcx.stream` directly rather than
+        :meth:`rfcx.Client.stream`, working around an upstream SDK bug where
+        the latter passes the ``Credentials`` object instead of the bearer
+        token.  ``None`` (HTTP error) triggers one refresh and retry.
+
+        Returns
+        -------
+        dict[str, Any]
+            The stream metadata dict.
+
+        Raises
+        ------
+        RuntimeError
+            If the metadata request still fails after a token refresh.
+        """
+        import rfcx._api_rfcx as _rfcx_api
+
+        meta = _rfcx_api.stream(self._token, stream_id)
+        if meta is None:
+            self._refresh_token()
+            meta = _rfcx_api.stream(self._token, stream_id)
+            if meta is None:
+                raise RuntimeError(
+                    f"Failed to fetch stream metadata for {stream_id!r}."
+                )
+        return meta
+
+
+# ---------------------------------------------------------------------------
 # Dataset classes
 # ---------------------------------------------------------------------------
 
 
-class Arbimon(_ArbimonMixin, Dataset):
-    """Arbimon / RFCx stream-based dataset loader.
+class Arbimon(_RfcxClientMixin, Dataset):
+    """Arbimon / RFCx stream-based dataset loader (official RFCx SDK).
+
+    Description
+    -----------
+    Streams audio recordings from a specific stream on the Arbimon / RFCx
+    platform using the **official** ``rfcx`` Python SDK
+    (https://github.com/rfcx/rfcx-sdk-python) for authentication and all
+    metadata calls.  Segments are enumerated with
+    :meth:`rfcx.Client.stream_segments` and audio is fetched on demand.
+
+    The official SDK only exposes ``download_segment`` / ``download_segments``,
+    which write files to local disk.  This loader keeps the dataset
+    **streaming-only**: it reuses the SDK's authenticated request (same URL,
+    headers, and redirect handling as :func:`rfcx._audio.__save_file`) but
+    reads each segment's bytes into memory and decodes them on the fly, so
+    nothing is written to disk.
+
+    The ``start`` and ``end`` parameters bound the recording window; when
+    omitted they are resolved from :meth:`rfcx.Client.stream`.  Arbimon
+    streams can span months or years of 1-minute segments, so bounding the
+    window keeps iteration finite.
+
+    Authentication mirrors the SDK exactly:
+
+    * **Machine auth** - Set ``AUTH0_CLIENT_ID`` and ``AUTH0_CLIENT_SECRET``
+      (or pass them directly; they are exported to the environment for the
+      SDK).  Uses the OAuth 2.0 client-credentials grant.
+    * **Device flow** - Interactive browser-based login.  The resulting token
+      is cached at ``credentials_file`` (default ``~/.rfcx_credentials``) so
+      subsequent runs skip the browser step.
+
+    Use the `list_projects` and `list_streams` classmethods to discover
+    available data before creating an instance.
+
+    Notes
+    -----
+    Each ``_process`` call makes one authenticated request that follows the
+    RFCx API redirect to a pre-signed S3 URL (the ``requests`` library drops
+    the ``Authorization`` header on the cross-host redirect, as the SDK
+    relies on).
+
+    References
+    ----------
+    https://arbimon.org
+    https://github.com/rfcx/rfcx-sdk-python
+
+    Examples
+    --------
+    >>> from soundscape_ssl.data.datasets import Arbimon
+    >>> projects = Arbimon.list_projects()
+    >>> streams = Arbimon.list_streams(project_id=projects[0]["id"])
+    >>> ds = Arbimon(stream_id=streams[0]["id"])
+    >>> for item in ds:
+    ...     print(item["start"], item["audio"].shape)
+    """
+
+    info = DatasetInfo(
+        name="arbimon",
+        owner="moritz",
+        split_paths={},
+        version="0.1.0",
+        description=(
+            "Arbimon / RFCx stream recordings loader (official RFCx SDK). "
+            "Streams audio segments from a given stream via the rfcx Python client."
+        ),
+        sources=["Arbimon / RFCx"],
+        license="various",
+    )
+
+    def __init__(
+        self,
+        stream_id: str,
+        start: str | datetime | None = None,
+        end: str | datetime | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        credentials_file: str | Path = "~/.rfcx_credentials",
+        output_take_and_give: dict[str, str] | None = None,
+        sample_rate: int | None = None,
+        backend: BackendType = "polars",
+    ) -> None:
+        """Initialise the Arbimon dataset.
+
+        Parameters
+        ----------
+        stream_id : str
+            RFCx stream ID.  Use `list_projects` and `list_streams` to
+            discover available stream IDs.
+        start : str, datetime, or None, optional
+            Start of the recording window (ISO-8601 string or datetime).
+            When ``None`` (default), resolved via
+            :meth:`rfcx.Client.stream`.  Falls back to ``_EARLIEST_DATE``
+            (``"2000-01-01T00:00:00.000Z"``) if the stream also reports
+            ``None``.
+        end : str, datetime, or None, optional
+            End of the recording window (ISO-8601 string or datetime).
+            When ``None`` (default), resolved via
+            :meth:`rfcx.Client.stream`.  Falls back to
+            ``datetime.now(UTC)`` if the stream also reports ``None``.
+        client_id : str, optional
+            Auth0 client ID.  When set, exported as ``AUTH0_CLIENT_ID`` for
+            the SDK; otherwise the SDK uses the env var or its default
+            client ID.
+        client_secret : str, optional
+            Auth0 client secret.  When set, exported as
+            ``AUTH0_CLIENT_SECRET`` for the SDK, selecting machine auth.
+        credentials_file : str or Path, optional
+            Path for caching the access/refresh token between runs.
+            Defaults to ``~/.rfcx_credentials``.
+        output_take_and_give : dict[str, str], optional
+            Optional mapping of ``original_key -> new_key`` that filters
+            and renames output fields before returning each item.
+        sample_rate : int, optional
+            Target sample rate in Hz.  When set, audio is resampled
+            on-the-fly using ``librosa``.
+        backend : BackendType, optional
+            DataFrame backend, by default ``"polars"``.
+        """
+        super().__init__(output_take_and_give, backend=backend, streaming=True)
+        self.stream_id = stream_id
+        self.start: str | None = (
+            start if start is None or isinstance(start, str) else start.isoformat()
+        )
+        self.end: str | None = (
+            end if end is None or isinstance(end, str) else end.isoformat()
+        )
+        self.sample_rate = sample_rate
+        self._stream_meta: dict[str, Any] | None = None
+
+        self._credentials_file = Path(credentials_file).expanduser()
+        self._client = self._make_client(client_id, client_secret, self._credentials_file)
+        self._token = self._client.credentials.token
+        self._session = requests.Session()
+
+        if self.start is None or self.end is None:
+            self._fetch_stream_bounds()
+
+    # ------------------------------------------------------------------
+    # Dataset interface
+    # ------------------------------------------------------------------
+
+    def _load(self) -> None:
+        """No-op; Arbimon is streaming-only."""
+        pass
+
+    @property
+    def columns(self) -> list[str]:
+        """Return the output column names."""
+        return ["audio", "sample_rate", "stream_id", "start", "end"]
+
+    @property
+    def available_splits(self) -> list[str]:
+        """Return available splits (the configured stream ID)."""
+        return [self.stream_id]
+
+    def _process(self, segment: dict[str, Any]) -> dict[str, Any]:
+        """Download and decode a single audio segment.
+
+        Parameters
+        ----------
+        segment : dict[str, Any]
+            Segment metadata dict as returned by the RFCx API, containing
+            at least a ``"start"`` key with an ISO-8601 timestamp.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary with keys ``"audio"`` (np.ndarray, float32),
+            ``"sample_rate"`` (int), ``"stream_id"`` (str), ``"start"``
+            (str), and ``"end"`` (str).  If `output_take_and_give` was
+            set, only the remapped keys are returned.
+        """
+        seg_start = segment["start"]
+        audio_bytes = self._fetch_segment_bytes(self.stream_id, seg_start)
+
+        audio, sr = _read_audio_from_file(io.BytesIO(audio_bytes), format="FLAC")
+        audio = audio.astype(np.float32)
+        audio = audio_stereo_to_mono(audio, mono_method="average")
+
+        if self.sample_rate is not None and sr != self.sample_rate:
+            audio = librosa.resample(
+                y=audio,
+                orig_sr=sr,
+                target_sr=self.sample_rate,
+                scale=True,
+                res_type="kaiser_best",
+            )
+            sr = self.sample_rate
+
+        row: dict[str, Any] = {
+            "audio": audio,
+            "sample_rate": sr,
+            "stream_id": self.stream_id,
+            "start": seg_start,
+            "end": segment.get("end", ""),
+        }
+
+        if self.output_take_and_give:
+            return {new_key: row[orig_key] for orig_key, new_key in self.output_take_and_give.items()}
+
+        return row
+
+    def __len__(self) -> int:
+        """Not supported; Arbimon is streaming-only."""
+        raise NotImplementedError(
+            "Arbimon only supports streaming iteration; use `for item in dataset`."
+        )
+
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        """Not supported; Arbimon is streaming-only."""
+        raise NotImplementedError(
+            "Arbimon only supports streaming iteration; use `for item in dataset`."
+        )
+
+    def __iter__(self) -> Iterator[dict[str, Any]]:
+        """Iterate over all segments in the configured time window.
+
+        Yields
+        ------
+        dict[str, Any]
+            Processed audio item (see `_process`).
+        """
+        for seg in self._iter_segments():
+            yield self._process(seg)
+
+    @classmethod
+    def from_config(cls, dataset_config: DatasetConfig) -> tuple[Arbimon, dict[str, Any]]:
+        """Instantiate from a `DatasetConfig`.
+
+        Returns
+        -------
+        tuple[Arbimon, dict[str, Any]]
+            The dataset instance and a (possibly empty) transformation
+            metadata dict.
+        """
+        cfg = dataset_config.model_dump(exclude={"dataset_name", "transformations"})
+        ds = cls(
+            stream_id=cfg["stream_id"],
+            start=cfg.get("start"),
+            end=cfg.get("end"),
+            output_take_and_give=cfg.get("output_take_and_give"),
+            sample_rate=cfg.get("sample_rate"),
+            backend=cfg.get("backend", "polars"),
+        )
+        if dataset_config.transformations:
+            meta = ds.apply_transformations(dataset_config.transformations)
+            return ds, meta
+        return ds, {}
+
+    def __str__(self) -> str:
+        return (
+            f"{self.info.name} (v{self.info.version}), stream_id={self.stream_id}\n"
+            f"Window: {self.start} - {self.end}\n"
+            f"Description: {self.info.description}\n"
+            f"Sources: {', '.join(self.info.sources)}\n"
+            f"License: {self.info.license}"
+        )
+
+    # ------------------------------------------------------------------
+    # Discovery classmethods
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def list_projects(
+        cls,
+        keyword: str | None = None,
+        only_public: bool = True,
+        limit: int = 1000,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        credentials_file: str | Path = "~/.rfcx_credentials",
+    ) -> list[dict[str, Any]]:
+        """List Arbimon projects via :meth:`rfcx.Client.projects`.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of project dicts (``id``, ``name``, ``is_public``, ...).
+        """
+        client = cls._make_client(
+            client_id, client_secret, Path(credentials_file).expanduser()
+        )
+        return client.projects(keyword=keyword, only_public=only_public, limit=limit)
+
+    @classmethod
+    def list_streams(
+        cls,
+        project_id: str | None = None,
+        keyword: str | None = None,
+        only_public: bool = True,
+        limit: int = 1000,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        credentials_file: str | Path = "~/.rfcx_credentials",
+    ) -> list[dict[str, Any]]:
+        """List Arbimon streams via :meth:`rfcx.Client.streams`.
+
+        Each stream dict contains ``start`` and ``end`` timestamps that can
+        be passed directly to `Arbimon.__init__`.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of stream dicts (``id``, ``name``, ``start``, ``end``, ...).
+        """
+        client = cls._make_client(
+            client_id, client_secret, Path(credentials_file).expanduser()
+        )
+        return client.streams(
+            projects=[project_id] if project_id else None,
+            keyword=keyword,
+            include_public=only_public,
+            limit=limit,
+        )
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _iter_segments(self) -> Iterator[dict[str, Any]]:
+        """Paginate through segment metadata for the stream and time window.
+
+        Yields
+        ------
+        dict[str, Any]
+            Raw segment metadata dict from the RFCx API.
+        """
+        offset = 0
+        while True:
+            page = self._stream_segments_page(offset)
+            if not page:
+                break
+            yield from page
+            if len(page) < _PAGE_SIZE:
+                break
+            offset += _PAGE_SIZE
+
+    def _stream_segments_page(self, offset: int) -> list[dict[str, Any]]:
+        """Fetch one page of segments, refreshing the token once on failure.
+
+        The SDK returns ``None`` on an HTTP error (including 401) and ``[]``
+        when there is genuinely no more data.  ``None`` triggers one token
+        refresh and retry; a persistent ``None`` raises rather than silently
+        truncating iteration.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            One page of segment metadata dicts (possibly empty).
+
+        Raises
+        ------
+        RuntimeError
+            If the segment listing still fails after a token refresh.
+        """
+        page = self._client.stream_segments(
+            self.stream_id, start=self.start, end=self.end,
+            limit=_PAGE_SIZE, offset=offset,
+        )
+        if page is None:
+            self._refresh_token()
+            page = self._client.stream_segments(
+                self.stream_id, start=self.start, end=self.end,
+                limit=_PAGE_SIZE, offset=offset,
+            )
+            if page is None:
+                raise RuntimeError(
+                    f"Failed to list segments for stream {self.stream_id!r} "
+                    f"(offset={offset})."
+                )
+        return page
+
+    def _fetch_stream_bounds(self) -> None:
+        """Resolve ``self.start`` and/or ``self.end`` via :meth:`rfcx.Client.stream`.
+
+        Stores the full response dict in ``self._stream_meta``.  Only the
+        ``None`` bounds are overwritten, with the same fallbacks as the
+        legacy loader.
+        """
+        self._stream_meta = self._get_stream_meta(self.stream_id)
+        meta = self._stream_meta
+
+        if self.start is None:
+            self.start = meta.get("start") or _EARLIEST_DATE
+
+        if self.end is None:
+            self.end = (
+                meta.get("end")
+                or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            )
+
+
+class ArbimonLegacy(_ArbimonMixin, Dataset):
+    """Legacy Arbimon / RFCx stream-based dataset loader (hand-rolled HTTP/auth).
 
     Description
     -----------
@@ -535,8 +1074,7 @@ class Arbimon(_ArbimonMixin, Dataset):
     -----
     Arbimon segments are typically 1-minute recordings.  Each
     ``_process`` call makes two HTTP requests (an API redirect and an
-    S3 download).  Set ``prefetch_factor`` to overlap these downloads
-    with item consumption and improve throughput.
+    S3 download).
 
     References
     ----------
@@ -547,35 +1085,35 @@ class Arbimon(_ArbimonMixin, Dataset):
     --------
     Discover public projects and streams (no stream_id needed):
 
-    >>> from data.arbimon import Arbimon
-    >>> projects = Arbimon.list_projects()
-    >>> streams = Arbimon.list_streams(project_id=projects[0]["id"])
+    >>> from soundscape_ssl.data.datasets import ArbimonLegacy
+    >>> projects = ArbimonLegacy.list_projects()
+    >>> streams = ArbimonLegacy.list_streams(project_id=projects[0]["id"])
 
     Load a dataset with automatically resolved bounds:
 
-    >>> ds = Arbimon(stream_id=streams[0]["id"])
+    >>> ds = ArbimonLegacy(stream_id=streams[0]["id"])
     >>> print(ds.start, ds.end)  # resolved from stream metadata
     >>> for item in ds:
     ...     print(item["start"], item["audio"].shape)
 
-    Restrict to an explicit time window with concurrent prefetching:
+    Restrict to an explicit time window:
 
-    >>> ds = Arbimon(
+    >>> ds = ArbimonLegacy(
     ...     stream_id=streams[0]["id"],
     ...     start="2023-01-01T00:00:00Z",
     ...     end="2023-01-01T00:10:00Z",
-    ...     prefetch_factor=4,
     ... )
     """
 
     info = DatasetInfo(
-        name="arbimon",
+        name="arbimon_legacy",
         owner="moritz",
         split_paths={},
         version="0.1.0",
         description=(
-            "Arbimon / RFCx stream recordings loader. "
-            "Streams audio segments from a given stream via the RFCx REST API."
+            "Legacy Arbimon / RFCx stream recordings loader. "
+            "Streams audio segments from a given stream via the RFCx REST API "
+            "using a hand-rolled HTTP client and OAuth flow."
         ),
         sources=["Arbimon / RFCx"],
         license="various",
@@ -592,7 +1130,6 @@ class Arbimon(_ArbimonMixin, Dataset):
         output_take_and_give: dict[str, str] | None = None,
         sample_rate: int | None = None,
         backend: BackendType = "polars",
-        prefetch_factor: int = 0,
     ) -> None:
         """Initialise the Arbimon dataset.
 
@@ -630,12 +1167,6 @@ class Arbimon(_ArbimonMixin, Dataset):
             on-the-fly using ``librosa``.
         backend : BackendType, optional
             DataFrame backend, by default ``"polars"``.
-        prefetch_factor : int, optional
-            Number of audio segments to download concurrently in the
-            background during iteration.  ``0`` (default) downloads
-            segments sequentially.  A value of ``N > 0`` keeps N
-            downloads in flight ahead of the current item, overlapping
-            network I/O with item consumption.
         """
         super().__init__(output_take_and_give, backend=backend, streaming=True)
         self.stream_id = stream_id
@@ -646,7 +1177,6 @@ class Arbimon(_ArbimonMixin, Dataset):
             end if end is None or isinstance(end, str) else end.isoformat()
         )
         self.sample_rate = sample_rate
-        self._prefetch_factor = prefetch_factor
         self._stream_meta: dict[str, Any] | None = None
 
         resolved_id, resolved_secret, resolved_file = self._resolve_auth_params(
@@ -765,36 +1295,18 @@ class Arbimon(_ArbimonMixin, Dataset):
     def __iter__(self) -> Iterator[dict[str, Any]]:
         """Iterate over all segments in the configured time window.
 
-        Segment metadata is paginated lazily.  When `prefetch_factor` is
-        greater than zero, up to that many audio downloads run concurrently
-        in background threads, overlapping network I/O with item consumption.
+        Segment metadata is paginated lazily.
 
         Yields
         ------
         dict[str, Any]
             Processed audio item (see `_process`).
         """
-        if self._prefetch_factor <= 0:
-            for seg in self._iter_segments():
-                yield self._process(seg)
-            return
-
-        segments = self._iter_segments()
-        with ThreadPoolExecutor(max_workers=self._prefetch_factor) as executor:
-            pending: deque = deque()
-            # Pre-fill the buffer
-            for seg in itertools.islice(segments, self._prefetch_factor):
-                pending.append(executor.submit(self._process, seg))
-            # Slide the window
-            for seg in segments:
-                pending.append(executor.submit(self._process, seg))
-                yield pending.popleft().result()
-            # Drain remaining futures
-            while pending:
-                yield pending.popleft().result()
+        for seg in self._iter_segments():
+            yield self._process(seg)
 
     @classmethod
-    def from_config(cls, dataset_config: DatasetConfig) -> tuple[Arbimon, dict[str, Any]]:
+    def from_config(cls, dataset_config: DatasetConfig) -> tuple[ArbimonLegacy, dict[str, Any]]:
         """Instantiate from a `DatasetConfig`.
 
         Parameters
@@ -804,7 +1316,7 @@ class Arbimon(_ArbimonMixin, Dataset):
 
         Returns
         -------
-        tuple[Arbimon, dict[str, Any]]
+        tuple[ArbimonLegacy, dict[str, Any]]
             The dataset instance and a (possibly empty) transformation
             metadata dict.
         """
@@ -816,7 +1328,6 @@ class Arbimon(_ArbimonMixin, Dataset):
             output_take_and_give=cfg.get("output_take_and_give"),
             sample_rate=cfg.get("sample_rate"),
             backend=cfg.get("backend", "polars"),
-            prefetch_factor=cfg.get("prefetch_factor", 0),
         )
         if dataset_config.transformations:
             meta = ds.apply_transformations(dataset_config.transformations)
@@ -1010,7 +1521,7 @@ class Arbimon(_ArbimonMixin, Dataset):
             )
 
 
-class ArbimonDetections(_ArbimonMixin, Dataset):
+class ArbimonDetections(_RfcxClientMixin, Dataset):
     """Load specific audio clips from Arbimon streams based on a detection list.
 
     Description
@@ -1022,26 +1533,28 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
     the overlapping 1-minute RFCx segments, concatenates their audio, and
     trims to the exact window, returning a sub-segment clip ready for inference.
 
-    Detections may span multiple streams.  Auth is shared across all requests
-    via a single HTTP client and bearer token (refreshed automatically on 401).
+    Authentication and metadata use the **official** ``rfcx`` Python SDK; audio
+    is streamed into memory (no local files) via the same request the SDK uses
+    to download segments.  Detections may span multiple streams; auth is shared
+    across all requests via a single client and bearer token (refreshed
+    automatically on 401).
 
     Notes
     -----
     Each detection typically requires one or two segment downloads (one API
-    redirect + one S3 download each).  Set ``prefetch_factor`` to run several
-    detections concurrently and overlap network I/O.
+    redirect to a pre-signed S3 URL each).
 
     Examples
     --------
     >>> import pandas as pd
-    >>> from data.arbimon import ArbimonDetections
+    >>> from soundscape_ssl.data.datasets import ArbimonDetections
     >>> detections = pd.DataFrame({
     ...     "project_id": ["abc"],
     ...     "stream_id": ["xyz"],
     ...     "start_seconds": [0],
     ...     "end_seconds":   [120],
     ... })
-    >>> ds = ArbimonDetections(detections, prefetch_factor=4)
+    >>> ds = ArbimonDetections(detections)
     >>> for item in ds:
     ...     print(item["start"], item["audio"].shape)
     """
@@ -1068,7 +1581,6 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         output_take_and_give: dict[str, str] | None = None,
         sample_rate: int | None = None,
         backend: BackendType = "polars",
-        prefetch_factor: int = 0,
     ) -> None:
         """Initialise the ArbimonDetections dataset.
 
@@ -1084,11 +1596,12 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
             example, ``start_seconds=0, end_seconds=120`` retrieves the first
             two minutes of the stream.
         client_id : str, optional
-            Auth0 client ID.  Falls back to ``AUTH0_CLIENT_ID`` env var,
-            then the public RFCx SDK client ID.
+            Auth0 client ID.  When set, exported as ``AUTH0_CLIENT_ID`` for
+            the SDK; otherwise the SDK uses the env var or its default
+            client ID.
         client_secret : str, optional
-            Auth0 client secret.  Falls back to ``AUTH0_CLIENT_SECRET``.
-            When set, machine auth is used; otherwise device flow is used.
+            Auth0 client secret.  When set, exported as
+            ``AUTH0_CLIENT_SECRET`` for the SDK, selecting machine auth.
         credentials_file : str or Path, optional
             Path for caching the access/refresh token between runs.
             Defaults to ``~/.rfcx_credentials``.
@@ -1100,63 +1613,49 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
             on-the-fly using ``librosa`` after trimming.
         backend : BackendType, optional
             DataFrame backend, by default ``"polars"``.
-        prefetch_factor : int, optional
-            Number of detections to download concurrently in the background
-            during iteration.  ``0`` (default) processes detections
-            sequentially.
 
         """
         super().__init__(output_take_and_give, backend=backend, streaming=True)
         self._detections = self._to_records(detections)
         self.sample_rate = sample_rate
-        self._prefetch_factor = prefetch_factor
         self._stream_start_cache: dict[str, datetime] = {}
 
-        resolved_id, resolved_secret, resolved_file = self._resolve_auth_params(
-            client_id, client_secret, credentials_file
-        )
-        self._client_id = resolved_id
-        self._client_secret = resolved_secret
-        self._credentials_file = resolved_file
-        self._http = httpx.Client(timeout=httpx.Timeout(30.0, read=None))
-        self._token = self._get_token(resolved_id, resolved_secret, resolved_file, self._http)
+        self._credentials_file = Path(credentials_file).expanduser()
+        self._client = self._make_client(client_id, client_secret, self._credentials_file)
+        self._token = self._client.credentials.token
+        self._session = requests.Session()
 
     # ------------------------------------------------------------------
     # Pickle protocol (required for DataLoader num_workers > 0)
     # ------------------------------------------------------------------
 
-    def _ensure_http(self) -> None:
-        """Create ``self._http`` if it does not exist.
+    def _ensure_session(self) -> None:
+        """Create ``self._session`` if it does not exist.
 
         Called after unpickling so each DataLoader worker gets its own
-        ``httpx.Client``.  The existing ``_token`` is reused; the normal
-        401-handling in ``_get_auth`` will refresh it if expired.
+        ``requests.Session``.  The existing ``_client`` / ``_token`` are
+        reused; the normal 401-handling in `_fetch_segment_bytes` refreshes
+        the token if expired.
         """
-        if not hasattr(self, "_http") or self._http is None:
-            self._http = httpx.Client(
-                timeout=httpx.Timeout(30.0, read=None),
-                limits=httpx.Limits(
-                    max_keepalive_connections=5,
-                    max_connections=10,
-                ),
-            )
+        if not hasattr(self, "_session") or self._session is None:
+            self._session = requests.Session()
 
     def __getstate__(self) -> dict:
-        """Return pickle state without the unpicklable HTTP client.
+        """Return pickle state without the unpicklable HTTP session.
 
         Returns
         -------
         dict
-            Instance ``__dict__`` with ``_http`` removed.
+            Instance ``__dict__`` with ``_session`` removed.
         """
         state = self.__dict__.copy()
-        state.pop("_http", None)
+        state.pop("_session", None)
         return state
 
     def __setstate__(self, state: dict) -> None:
-        """Restore state after unpickling and recreate the HTTP client."""
+        """Restore state after unpickling and recreate the HTTP session."""
         self.__dict__.update(state)
-        self._ensure_http()
+        self._ensure_session()
 
     # ------------------------------------------------------------------
     # Dataset interface
@@ -1199,39 +1698,22 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         dict[str, Any]
             Processed audio item (see `_process_detection`).
         """
-        self._ensure_http()
+        self._ensure_session()
         return self._process_detection(self._detections[idx])
-
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
         """Iterate over all detections, yielding one trimmed audio clip each.
-
-        When `prefetch_factor` is greater than zero, up to that many
-        detections are downloaded concurrently in background threads.
 
         Yields
         ------
         dict[str, Any]
             Processed audio item (see `_process_detection`).
         """
-        if self._prefetch_factor <= 0:
-            for det in self._detections:
-                try:
-                    yield self._process_detection(det)
-                except ValueError:
-                    continue
-            return
-
-        dets = iter(self._detections)
-        with ThreadPoolExecutor(max_workers=self._prefetch_factor) as executor:
-            pending: deque = deque()
-            for det in itertools.islice(dets, self._prefetch_factor):
-                pending.append(executor.submit(self._process_detection, det))
-            for det in dets:
-                pending.append(executor.submit(self._process_detection, det))
-                yield pending.popleft().result()
-            while pending:
-                yield pending.popleft().result()
+        for det in self._detections:
+            try:
+                yield self._process_detection(det)
+            except ValueError:
+                continue
 
     @classmethod
     def from_config(cls, dataset_config: DatasetConfig) -> tuple[ArbimonDetections, dict[str, Any]]:
@@ -1279,7 +1761,6 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
             output_take_and_give=cfg.get("output_take_and_give"),
             sample_rate=cfg.get("sample_rate"),
             backend=backend,
-            prefetch_factor=cfg.get("prefetch_factor", 0),
         )
         if dataset_config.transformations:
             meta = ds.apply_transformations(dataset_config.transformations)
@@ -1349,6 +1830,39 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
 
         return all_records
 
+    def _list_segments(
+        self, stream_id: str, start: str, end: str, limit: int, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        """List segment metadata via the SDK, refreshing the token once on failure.
+
+        The SDK returns ``None`` on an HTTP error (including 401) and ``[]``
+        when there is genuinely no data.  ``None`` triggers one token refresh
+        and retry; a persistent ``None`` raises.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            One page of segment metadata dicts (possibly empty).
+
+        Raises
+        ------
+        RuntimeError
+            If the segment listing still fails after a token refresh.
+        """
+        page = self._client.stream_segments(
+            stream_id, start=start, end=end, limit=limit, offset=offset
+        )
+        if page is None:
+            self._refresh_token()
+            page = self._client.stream_segments(
+                stream_id, start=start, end=end, limit=limit, offset=offset
+            )
+            if page is None:
+                raise RuntimeError(
+                    f"Failed to list segments for stream {stream_id!r}."
+                )
+        return page
+
     def _get_stream_start(self, stream_id: str) -> datetime:
         """Return the UTC start datetime of a stream, fetching and caching on first call.
 
@@ -1372,18 +1886,16 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
             If the stream has no reported start time and contains no segments.
         """
         if stream_id not in self._stream_start_cache:
-            resp = self._get_auth(f"{_API_BASE}/streams/{stream_id}")
-            start_str = resp.json().get("start")
+            meta = self._get_stream_meta(stream_id)
+            start_str = meta.get("start")
             if start_str:
                 self._stream_start_cache[stream_id] = self._parse_rfcx_timestamp(start_str)
             else:
                 # Stream metadata has no start; find the first actual segment.
                 now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-                seg_resp = self._get_auth(
-                    f"{_API_BASE}/streams/{stream_id}/segments",
-                    params={"start": _EARLIEST_DATE, "end": now_iso, "limit": 1, "offset": 0},
+                segments = self._list_segments(
+                    stream_id, _EARLIEST_DATE, now_iso, limit=1
                 )
-                segments = seg_resp.json()
                 if not segments:
                     raise ValueError(
                         f"Stream {stream_id!r} has no reported start time and no segments."
@@ -1436,16 +1948,9 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         # whether strftime's sub-second truncation puts us exactly on a boundary.
         fetch_end_iso = (end_dt + timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-        resp = self._get_auth(
-            f"{_API_BASE}/streams/{stream_id}/segments",
-            params={
-                "start": fetch_start_iso,
-                "end": fetch_end_iso,
-                "limit": _PAGE_SIZE,
-                "offset": 0,
-            },
+        segments: list[dict[str, Any]] = self._list_segments(
+            stream_id, fetch_start_iso, fetch_end_iso, limit=_PAGE_SIZE
         )
-        segments: list[dict[str, Any]] = resp.json()
 
         if not segments:
             print(f"No segments found for stream {stream_id!r}")
@@ -1511,19 +2016,8 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
             }
         return row
 
-    @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=1, max=30),
-        reraise=True,  # re-raise the final failure after last attempt
-    )
-    def _fetch_s3(self, url: str) -> httpx.Response:
-        """Download from a presigned S3 URL with automatic retries on 5xx."""
-        resp = self._http.get(url, follow_redirects=True)
-        resp.raise_for_status()
-        return resp
-
     def _download_segment(self, stream_id: str, seg_start: str) -> tuple[np.ndarray, int]:
-        """Download and decode one RFCx audio segment.
+        """Download and decode one RFCx audio segment in memory.
 
         Stereo audio is converted to mono.  Resampling is intentionally
         deferred to `_process_detection` so it operates on the final
@@ -1541,12 +2035,8 @@ class ArbimonDetections(_ArbimonMixin, Dataset):
         tuple[np.ndarray, int]
             Float32 mono audio array and its native sample rate.
         """
-        start_str = seg_start if seg_start.endswith("Z") else seg_start + "Z"
-        url = f"{_API_BASE}/streams/{stream_id}/segments/{start_str}/file"
-        redirect_resp = self._get_redirecting(url, params={"file_extension": "flac"})
-        s3_url = redirect_resp.headers["location"]
-        s3_resp = self._fetch_s3(s3_url)
-        audio, sr = _read_audio_from_file(io.BytesIO(s3_resp.content), format="FLAC")
+        audio_bytes = self._fetch_segment_bytes(stream_id, seg_start)
+        audio, sr = _read_audio_from_file(io.BytesIO(audio_bytes), format="FLAC")
         audio = audio.astype(np.float32)
         return audio_stereo_to_mono(audio, mono_method="average"), sr
 

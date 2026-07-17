@@ -1,22 +1,22 @@
 """HuggingFace-backed soundscape pre-training dataset.
 
 Unlike :mod:`soundscape_ssl.data.datasets.xeno_canto`, whose source data lives
-on GCS and is described by ``esp_data`` split CSVs, this dataset streams its
+on GCS and is described by ``alp_data`` split CSVs, this dataset streams its
 audio from a HuggingFace Hub dataset repository
 (`mwirth7/soundscape-pretrain <https://huggingface.co/datasets/mwirth7/soundscape-pretrain>`_).
 That repo exposes two splits — ``a2o`` (Australian Acoustic Observatory) and
 ``arbimon`` (Arbimon / RFCx) — each a set of Parquet shards whose ``audio``
 column holds FLAC-encoded bytes (see :mod:`scripts.download_to_hf`).
 
-The class still derives from :class:`esp_data.Dataset` so it plugs into the
+The class still derives from :class:`alp_data.Dataset` so it plugs into the
 same registry, config system, and :class:`~soundscape_ssl.data.MixedStreamingDataset`
 loader as every other ESP dataset.
 """
 
 from typing import Any, Dict, Iterator
 
-from esp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
-from esp_data.backends import BackendType
+from alp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
+from alp_data.backends import BackendType
 
 DEFAULT_REPO_ID = "mwirth7/soundscape-pretrain"
 
@@ -48,7 +48,7 @@ class SoundscapePretrain(Dataset):
 
     To pre-train on both at once, instantiate one dataset per split and combine
     them with :class:`~soundscape_ssl.data.MixedStreamingDataset` (or an
-    ``esp_data`` ``ConcatConfig``) rather than expecting a single combined split.
+    ``alp_data`` ``ConcatConfig``) rather than expecting a single combined split.
 
     Parameters
     ----------
@@ -64,7 +64,7 @@ class SoundscapePretrain(Dataset):
         on decode.  The shards are already encoded at 32 kHz.
     output_take_and_give : dict[str, str], optional
         Maps original column names to renamed output keys, exactly as in
-        :class:`~esp_data.datasets.XenoCanto`.  The audio payload
+        :class:`~alp_data.datasets.XenoCanto`.  The audio payload
         (``audio_bytes`` / ``audio_format`` / ``sample_rate``) is always
         carried regardless of this mapping.
     cache_dir : str, optional
@@ -185,7 +185,7 @@ class SoundscapePretrain(Dataset):
     def from_config(
         cls, dataset_config: DatasetConfig
     ) -> tuple["SoundscapePretrain", dict[str, Any]]:
-        """Create a dataset instance from a :class:`~esp_data.DatasetConfig`.
+        """Create a dataset instance from a :class:`~alp_data.DatasetConfig`.
 
         ``repo_id`` and ``cache_dir`` are read from the config's extra fields
         when present (``DatasetConfig`` allows extra keys), otherwise the

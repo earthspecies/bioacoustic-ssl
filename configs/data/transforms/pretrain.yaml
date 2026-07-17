@@ -6,6 +6,9 @@
 - _target_: soundscape_ssl.data.transforms.ToTensor
   keys: [audio]
   _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.filter_empty.DropEmptyAudio
+  target_key: audio
+  _stage_: [train, test]
 - _target_: soundscape_ssl.data.transforms.PeakNormalize
   target_key: audio
   _stage_: [train, test]
@@ -17,6 +20,7 @@
     max_gain_in_db: 6
     sample_rate: 32_000
     output_type: dict
+  _stage_: [train]
 - _target_: soundscape_ssl.data.transforms.MeanMix
   p: 0.3
   max_samples: 2
@@ -33,6 +37,8 @@
 - _target_: soundscape_ssl.data.transforms.spectrogram.BatchSpectrogram
   sample_rate: 32000
   _stage_: [train, test]
+  _device_: true
 - _target_: soundscape_ssl.data.transforms.padding.BatchPadding
   target_shape: [128, 512]
   _stage_: [train, test]
+  _device_: true

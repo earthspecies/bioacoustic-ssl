@@ -1,0 +1,9 @@
+# @package data.datasets.nasa_s2l_random
+
+_target_: soundscape_ssl.data.datasets.NASAEarthAccess
+split: S2L_RANDOM
+sample_rate: 32000
+n_records: -1
+output_take_and_give:
+  audio: audio
+  sample_rate: sample_rate

@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+  - override /data: pretrain
+  - override /data/datasets: [pretrain/xc_raw]
+
+
+data:
+  weights: null

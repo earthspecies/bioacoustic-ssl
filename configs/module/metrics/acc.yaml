@@ -1,0 +1,6 @@
+# @package module.metrics.acc
+
+_target_: torchmetrics.classification.MulticlassAccuracy
+num_classes: ${data.num_classes}
+average: "macro"
+_stage_: ["test"]

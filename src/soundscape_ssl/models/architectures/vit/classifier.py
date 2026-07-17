@@ -187,6 +187,107 @@ class ViTProtoFloat(ViTEncoder):
         return self.head(feat)                      # (B, num_classes)
 
 
+class ViTProtoLayerwise(ViTProtoFloat):
+    """ViT encoder with a prototypical head over a softmax-weighted sum of all
+    transformer-layer hidden states (SUPERB-style layerwise probing).
+
+    Motivation:
+        In an MAE the final encoder layers specialise for reconstruction, so the
+        most linearly-separable / transferable features often live in a middle
+        layer rather than the last one. Instead of probing a single fixed layer,
+        this head learns one scalar weight per block, softmax-normalises them,
+        and combines every block's token sequence into a single representation
+        that is then fed to the same :class:`PrototypicalFloat` head as
+        :class:`ViTProtoFloat`. The learned weight vector also doubles as a
+        readout of *where* the useful features sit.
+
+    The encoder stays frozen during probing; only the per-layer weights, the
+    optional per-layer norms, and the prototype head are trained. The learned
+    ``layer_weights`` (after softmax) can be inspected post-hoc to see which
+    layers the probe relied on.
+
+    Args:
+        num_classes: Number of output classes (logits dimension).
+        head_drop: Dropout applied before the prototype head (default: 0.0).
+        num_prototypes: Prototypes per class for the :class:`PrototypicalFloat`
+            head (default: 20).
+        layer_norm: If ``True`` (default), apply an independent LayerNorm to each
+            block's output before the weighted sum, so layers with different
+            activation scales are comparable. Set ``False`` to weight the raw
+            block outputs directly.
+        **encoder_kwargs: All keyword arguments forwarded to :class:`ViTEncoder`.
+    """
+
+    def __init__(
+        self,
+        num_classes: int,
+        head_drop: float = 0.0,
+        num_prototypes: int = 20,
+        layer_norm: bool = True,
+        **encoder_kwargs,
+    ) -> None:
+        super().__init__(
+            num_classes=num_classes,
+            head_drop=head_drop,
+            num_prototypes=num_prototypes,
+            **encoder_kwargs,
+        )
+
+        self.num_layers: int = encoder_kwargs.get("depth", 12)
+        # One learnable scalar per block, softmax-normalised at forward time.
+        # Init at zeros → uniform softmax → equal-weight average to start.
+        self.layer_weights = nn.Parameter(torch.zeros(self.num_layers))
+
+        if layer_norm:
+            self.layer_norms = nn.ModuleList([
+                nn.LayerNorm(self.embed_dim, eps=encoder_kwargs.get("norm_eps", 1e-6))
+                for _ in range(self.num_layers)
+            ])
+        else:
+            self.layer_norms = None
+
+    def freeze_backbone(self, freeze: bool = True) -> None:
+        """Freeze the encoder, keeping the head AND the layerwise-fusion params
+        (``layer_weights`` / ``layer_norms``) trainable.
+
+        Overrides :meth:`ViTProtoFloat.freeze_backbone`, whose ``head``-only
+        rule would otherwise freeze the layer-fusion parameters too.
+        """
+        trainable = ("head", "layer_weights", "layer_norms")
+        for name, param in self.named_parameters():
+            if not name.startswith(trainable):
+                param.requires_grad_(not freeze)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        """Forward pass: spectrogram → class logits via a learned weighted sum
+        of every transformer block's output.
+
+        Args:
+            x: Input spectrogram, shape ``(B, C, H, W)``.
+
+        Returns:
+            Class logits, shape ``(B, num_classes)``.
+        """
+        # Per-block hidden states, each (B, N+1, D), before the encoder's norm.
+        hidden: list[torch.Tensor] = ViTEncoder.forward(self, x, return_hidden=True)
+        B = hidden[0].shape[0]
+
+        if self.layer_norms is not None:
+            hidden = [ln(h) for ln, h in zip(self.layer_norms, hidden)]
+
+        stacked = torch.stack(hidden, dim=0)          # (L, B, N+1, D)
+        w = torch.softmax(self.layer_weights, dim=0)  # (L,)
+        fused = (stacked * w.view(-1, 1, 1, 1)).sum(dim=0)  # (B, N+1, D)
+
+        cls_features = fused[:, 0]
+        patch_features = fused[:, 1:]
+
+        z_f = patch_features - cls_features.unsqueeze(1)
+        feat = z_f.permute(0, 2, 1).reshape(B, self.embed_dim, *self.patch_embed.grid_size)
+        feat = self.head_drop(feat)
+        return self.head(feat)                        # (B, num_classes)
+
+
 class PrototypicalFloat(nn.Module):  # protofloat
     def __init__(
         self,

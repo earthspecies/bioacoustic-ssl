@@ -1,6 +1,7 @@
 # @package data.datasets.xc
 
-_target_: esp_data.datasets.XenoCanto
+_target_: alp_data.datasets.XenoCanto
+split: all
 sample_rate: 32000
 output_take_and_give:
   audio: audio

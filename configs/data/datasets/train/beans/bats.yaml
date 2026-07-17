@@ -1,0 +1,48 @@
+# egyptian_fruit_bats
+
+max_steps: 1500
+
+train:
+  _target_: alp_data.DatasetConfig
+  dataset_name: beans-raw
+  sample_rate: 32000
+  split: egyptian_fruit_bats_train
+  output_take_and_give:
+    audio_bytes: audio_bytes
+    label: label_string
+    label_cls: label
+  transformations:
+    - _target_: alp_data.transforms.LabelFromFeatureConfig
+      type: label_from_feature
+      feature: label
+      output_feature: label_cls
+
+validation:
+  _target_: alp_data.DatasetConfig
+  dataset_name: beans
+  sample_rate: 32000
+  split: egyptian_fruit_bats_validation
+  output_take_and_give:
+    audio: audio
+    label: label_string
+    label_cls: label
+  transformations:
+    - _target_: alp_data.transforms.LabelFromFeatureConfig
+      type: label_from_feature
+      feature: label
+      output_feature: label_cls
+
+test:
+  _target_: alp_data.DatasetConfig
+  dataset_name: beans
+  sample_rate: 32000
+  split: egyptian_fruit_bats_test
+  output_take_and_give:
+    audio: audio
+    label: label_string
+    label_cls: label
+  transformations:
+    - _target_: alp_data.transforms.LabelFromFeatureConfig
+      type: label_from_feature
+      feature: label
+      output_feature: label_cls

@@ -1,12 +1,12 @@
 train:
   batch_size: 512
-  num_workers: 40
+  num_workers: 48
   pin_memory: True
   persistent_workers: True
-  prefetch_factor: 6
+#  prefetch_factor: 2
   in_order: false # pytorch +2.5.0
 val_test:
-  batch_size: 512
-  num_workers: 22
+  batch_size: 256
+  num_workers: 20
   pin_memory: True
-  persistent_workers: True
+  #persistent_workers: True

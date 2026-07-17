@@ -109,6 +109,12 @@ class MixedStreamingDataset(IterableDataset):
             sample = self.datasets[ds_idx][indices[ds_idx][pointers[ds_idx]]]
             pointers[ds_idx] += 1
 
+            # A dataset may return None to signal an unusable sample (e.g. an
+            # event that decoded to zero audio frames). Skip it and draw
+            # another, without counting it toward this worker's step budget.
+            if sample is None:
+                continue
+
             if self.transform is not None:
                 sample = self.transform(sample)
 

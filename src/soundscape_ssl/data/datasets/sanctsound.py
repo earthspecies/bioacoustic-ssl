@@ -18,7 +18,7 @@ This subclass is a convenience wrapper that defaults to the SanctSound split;
 it is exactly equivalent to ``NOAA(split="SANCTSOUND", ...)``.
 """
 
-from esp_data import DatasetInfo, register_dataset
+from alp_data import DatasetInfo, register_dataset
 
 from .noaa import _SANCTSOUND_ROOT, NOAA
 
@@ -65,5 +65,12 @@ class SanctSound(NOAA):
         license="CC-BY-4.0, CC0",
     )
 
-    def __init__(self, split: str = "SANCTSOUND", *args, **kwargs) -> None:
-        super().__init__(*args, split=split, **kwargs)
+    def __init__(
+        self,
+        split: str = "SANCTSOUND",
+        max_event_seconds: float | None = 6,
+        min_event_gap_seconds: float | None = 300,
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, split=split, max_event_seconds=max_event_seconds, min_event_gap_seconds=min_event_gap_seconds, **kwargs)

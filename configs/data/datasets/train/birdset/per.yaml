@@ -1,10 +1,10 @@
 max_steps: 7500
 
 train:
-  _target_: esp_data.DatasetConfig
+  _target_: alp_data.DatasetConfig
   dataset_name: xeno-canto-raw
   sample_rate: 32000
-  split: all_unseen
+  split: all
   output_take_and_give:
     audio_bytes: audio_bytes
     label: label
@@ -32,7 +32,7 @@ train:
       class_ids: *cls
 
 test:
-  _target_: esp_data.DatasetConfig
+  _target_: alp_data.DatasetConfig
   dataset_name: birdset
   sample_rate: 32000
   split: PER-test_5s
