@@ -4,6 +4,7 @@ __pycache__/
 *.pyd
 *.pyo
 .Python
+.env
 env/
 venv/
 pip-wheel-metadata/
