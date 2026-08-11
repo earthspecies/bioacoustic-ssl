@@ -5,7 +5,7 @@ import tempfile
 import numpy as np
 import soundfile as sf
 import torch
-from alp_data.io.read_utils import get_audio_info, read_audio_by_time
+from alp_data.io.read_utils import get_audio_info, read_audio
 from soundfile import LibsndfileError
 
 from soundscape_ssl.data.transforms.base import Transform
@@ -125,13 +125,18 @@ class TimeShift(Transform):
         info = get_audio_info(audio_path)
         start_secs = random.uniform(0, max(info["duration"] - self.output_length, 0.0))
 
-        audio, sr = read_audio_by_time(audio_path, start_time=start_secs, end_time=start_secs + self.output_length)
+        # anonymous=True: our GCS buckets are public, so skip the ambient
+        # (expiring) credentials on the ffmpeg range-read path — see
+        # soundscape_ssl.data.datasets._gcs_anon.
+        audio, sr = read_audio(
+            audio_path, start_time=start_secs, end_time=start_secs + self.output_length, anonymous=True
+        )
 
         # get_audio_info can overestimate duration for VBR files (e.g. MP3), so
         # the window may land past the true EOF and decode to zero frames. Retry
         # from the start, which yields real audio for any decodable file.
         if audio.size == 0 and start_secs > 0.0:
-            audio, sr = read_audio_by_time(audio_path, start_time=0.0, end_time=self.output_length)
+            audio, sr = read_audio(audio_path, start_time=0.0, end_time=self.output_length, anonymous=True)
 
         target_sr: int | None = self.sample_rate or info["sr"]
 

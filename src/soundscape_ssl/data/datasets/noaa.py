@@ -66,9 +66,10 @@ detection.
 
 Audio loading
 -------------
-Audio is read lazily with :func:`alp_data.io.read_audio_by_time`, which issues
-HTTP ``Range`` requests against GCS and therefore downloads only the FLAC
-header plus the requested window — never the full multi-hour file.
+Audio is read lazily with :func:`alp_data.io.read_audio` (time-range mode),
+which streams only the requested window from GCS — either via ffmpeg HTTP range
+requests or, as a fallback, gcsfs ``Range`` requests — never the full
+multi-hour file.
 """
 
 import bisect
@@ -86,7 +87,7 @@ import pandas as pd
 from alp_data import Dataset, DatasetConfig, DatasetInfo, register_dataset
 from alp_data.backends import BackendType
 from alp_data.io import audio_stereo_to_mono
-from alp_data.io.read_utils import get_audio_info, read_audio_by_time
+from alp_data.io.read_utils import get_audio_info, read_audio
 
 logger = logging.getLogger(__name__)
 
@@ -861,7 +862,7 @@ class NOAA(Dataset):
                 raw_path = spec.path_repair(raw_path)
             audio_path, start_s, end_s = self._resolve_audio(event, raw_path)
 
-        audio, sr = read_audio_by_time(audio_path, start_time=start_s, end_time=end_s)
+        audio, sr = read_audio(audio_path, start_time=start_s, end_time=end_s)
         audio = audio.astype(np.float32)
         audio = audio_stereo_to_mono(audio, mono_method="average")
 

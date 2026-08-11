@@ -1,0 +1,83 @@
+# AudioMAE (facebookresearch/AudioMAE, AudioSet-2M pretrained) input pipeline.
+#
+# Faithful to AudioMAE's own `dataset.py` / `main_finetune_esc.py`, which set
+# BOTH `target_length` and the normalisation constants per dataset rather than
+# reusing the AudioSet ones:
+#   target_length = {audioset: 1024, esc50: 512, speechcommands: 128}
+#   norm_stats    = {audioset: [-4.2677393, 4.5689974], esc50: [-6.6268, ...]}
+# Our clips are 5 s like ESC-50's, so 512 frames is the faithful choice (the
+# checkpoint's 513-token pos_embed is re-gridded to the (8, 32) sincos grid by
+# scripts/convert_external_ckpt.py, exactly as AudioMAE does for ESC-50).
+#
+# mean/std below were fitted the same way, on 512 clean XC-train clips at
+# 16 kHz: -7.6314 / 4.3335. Fitted on the probe's *training* corpus only, so no
+# test statistics leak in.
+#
+# The waveform is resampled 32 kHz -> 16 kHz (AudioMAE's rate) after the 32 kHz
+# waveform augmentations. Pair with `module/model=proto/audiomae`.
+- _target_: soundscape_ssl.data.transforms.TimeShift
+  p: 1.0
+  output_length: 5.0
+  sample_rate: 32000
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.ToTensor
+  keys: [audio]
+  _stage_: [train, test]
+# See the note in `birdmae.yaml`: faithful (no peak normalisation) by default,
+# at the cost of a level-driven train/test std mismatch. Uncomment to switch the
+# whole arm to level-matched input.
+#- _target_: soundscape_ssl.data.transforms.PeakNormalize
+#  target_key: audio
+#  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+  num_classes: ${data.num_classes}
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.MeanMix
+  p: 0.9
+  max_samples: 3
+  label_key: label
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.RollingWindow
+  p: 1.0
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+  transform:
+    _target_: torch_audiomentations.Gain
+    p: 0.6
+    min_gain_in_db: -18
+    max_gain_in_db: 0
+    sample_rate: 32_000
+    output_type: dict
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.padding.WavePadding
+  _stage_: [train, test]
+- _target_: torch.utils.data.default_collate
+  _partial_: true
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+  transform:
+    _target_: torchaudio.transforms.Resample
+    orig_freq: 32000
+    new_freq: 16000
+  audio_key: audio
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.spectrogram.BatchKaldiFbank
+  sample_rate: 16000
+  target_length: 512
+  mean: -7.6314
+  std: 4.3335
+  pad_value: 0.0
+  _stage_: [train, test]
+# this combines time and freq masking
+- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+  transform:
+    _target_: torchaudio.transforms.SpecAugment
+    n_time_masks: 1
+    time_mask_param: 100
+    freq_mask_param: 50
+    n_freq_masks: 1
+    iid_masks: True
+  _stage_: [train]
+# must stay last: AudioMAE expects (B, 1, frames, n_mels)
+- _target_: soundscape_ssl.data.transforms.spectrogram.TransposeSpec
+  _stage_: [train, test]

@@ -1,0 +1,33 @@
+# @package _global_
+
+# Frozen prototypical probing of our own MAE checkpoints (final layer) across the
+# BEANS tasks — the sweeps/proto/birdset/vit protocol on the other benchmark.
+# BEANS is multiclass, so this swaps in the multiclass transforms, cross-entropy
+# and accuracy, and drops the class weighting BirdSet's multilabel setup uses.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /data/transforms: multiclass
+  - override /module/metrics: [acc]
+  - override /module/loss: ce
+  - override /module/model: proto/vit
+
+
+data:
+  class_weighting:
+    enabled: false
+  weights: null
+
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      #data/datasets: train/beans/bats, train/beans/cbi #, train/beans/dogs, train/beans/esc50, train/beans/humbugdb, train/beans/watkins
+      data/datasets: train/beans/cbi #, train/beans/dogs, train/beans/esc50, train/beans/humbugdb, train/beans/watkins
+      #data/datasets: train/beans/bats, train/beans/humbugdb, train/beans/watkins
+      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt, /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terra_marine.ckpt, /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terra_marine_long.ckpt
+      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terrestrial.ckpt
+      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_long.ckpt # xc (long)
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt # xc (long)

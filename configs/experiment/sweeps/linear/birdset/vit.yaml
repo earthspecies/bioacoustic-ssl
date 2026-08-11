@@ -1,0 +1,34 @@
+# @package _global_
+
+# Linear probing (final layer, no layerwise fusion): frozen encoder + a single
+# nn.Linear on the CLS token (see ViTClassifier / linear/vit). Same protocol as
+# sweeps/proto/birdset/vit, only the head differs — use it as the cheap/standard probe
+# next to the prototypical head.
+#
+# LR note: `birdset_eval.py` freezes the backbone, so `head.weight`/`head.bias`
+# are the only trainable params. They are not matched by the prototype-head
+# rule in param_groups_lrd, so they land in the last layer-decay group at
+# scale 1.0 — i.e. the head LR is exactly `base_lr * batch_size / 256`.
+# `prototype_lr` / `layer_weights_lr` have no matching params here and are
+# nulled out so the effective LR is readable from `base_lr` alone.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /module/model: linear/vit
+
+module:
+  optimizer:
+    prototype_lr: null
+    layer_weights_lr: null
+
+# Distinguish these runs from the proto/layerwise sweeps in W&B.
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-linear
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt

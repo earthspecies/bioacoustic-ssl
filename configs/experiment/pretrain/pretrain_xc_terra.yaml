@@ -1,9 +1,0 @@
-# @package _global_
-
-defaults:
-  - override /data: pretrain
-  - override /data/datasets: [pretrain/xc_raw, pretrain/arbimon_hf, pretrain/a2o_hf]
-
-
-data:
-  weights: [384, 83, 45]

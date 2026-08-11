@@ -1,0 +1,66 @@
+# @package _global_
+
+# Frozen LINEAR probing of PupuJEPA-Base (latent-predictive I-JEPA pretrained
+# from scratch on pooled XenoCanto + iNaturalist + AudioSet) across the BirdSet
+# downstream tasks, using PupuJEPA's own preprocessing (24 kHz magnitude log-mel,
+# n_fft 1024, hop 240, 0-12 kHz, -4.0900 / 2.0242) rather than ours.
+#
+# The head is a single nn.Linear on the MEAN of the patch tokens (see
+# `linear/pupujepa` / PupuJepaClassifier). PupuJEPA has no CLS token, so mean
+# pooling is not a variant choice: that mean is the clip embedding upstream's own
+# `embed.py` publishes. Against `sweeps/linear/birdset/vit` (linear/vit, pool: cls) the
+# read-out therefore differs as well as the backbone.
+#
+# Two-way contrast this gives us:
+#   * vs `sweeps/proto/birdset/pupujepa` — same backbone, same protocol, cheap
+#     linear head instead of the prototypical one.
+#   * vs `sweeps/linear/birdset/vit` — same head type, our XC/NASA MAEs instead of
+#     PupuJEPA.
+#
+# LR note, identical to `sweeps/linear/birdset/vit`: `birdset_eval.py` freezes the
+# backbone, so `head.weight`/`head.bias` are the only trainable params. They are
+# not matched by the prototype-head rule in param_groups_lrd, so they land in the
+# last layer-decay group at scale 1.0 — the head LR is exactly
+# `base_lr * batch_size / 256`. `prototype_lr` / `layer_weights_lr` have no
+# matching params here and are nulled so the effective LR reads off `base_lr`.
+#
+# No checkpoint step: `linear/pupujepa` loads its local `ckpt_path` at
+# construction, per submodule with strict=True, so `resume_from_checkpoint` is
+# nulled in the sweeper below. Leaving the `trainer/train.yaml` default in place
+# would hand `_load_checkpoint` one of our own XC checkpoints, whose
+# `encoder.`-stripped keys match nothing in this model — `strict=False` would
+# report that and carry on, i.e. fail silently.
+#
+# Cost: 1000 tokens at 5 s against the ViT-B/16 arms' 257, because the patch is 4
+# frames wide rather than 16. No padding is involved (RoPE is generated per input
+# grid), but it costs ~4x the activation memory and ~4-6x the step time. See the
+# sizing note in the launcher script.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: pupujepa
+  - override /module/model: linear/pupujepa
+
+module:
+  # Frozen encoder: only head.weight and head.bias train.
+  freeze_backbone: true
+  optimizer:
+    prototype_lr: null
+    layer_weights_lr: null
+
+# `PupuJEPA` stands in for the checkpoint token the other arms interpolate here,
+# so the name keeps the <split>-<backbone>-<seed> shape the eval-aggregation
+# tooling parses; the `-linear` suffix separates these runs from the proto and
+# layerwise sweeps in W&B, as in `sweeps/linear/birdset/vit`.
+run_name: ${data.datasets.test.split}-PupuJEPA-${seed}-linear
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      # Must be nulled *here*, not in a `trainer:` block above: train.yaml's
+      # defaults list merges the `trainer` group after `experiment`, so only a
+      # sweeper/CLI override outranks trainer/train.yaml's default path.
+      trainer.resume_from_checkpoint: 'null'
+      data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh

@@ -1,0 +1,30 @@
+# @package _global_
+
+# Prototypical probing of the published AudioMAE (AudioSet-2M) encoder across the
+# BirdSet downstream tasks, using AudioMAE's own preprocessing (kaldi fbank at
+# 16 kHz, 512 frames as it uses for 5 s clips, zero pad, mean/std re-fitted on
+# our XC-train corpus) rather than ours.
+#
+# The checkpoint is produced by `scripts/convert_external_ckpt.py audiomae`,
+# which the launcher script runs before fanning out; it also re-grids the
+# 513-token pos_embed onto the (8, 32) sincos grid. Model + transforms +
+# checkpoint are pinned together here: they must vary as a unit, so the sweeper
+# only crosses datasets and seeds.
+#
+# The Bird-MAE paper's Audio-MAE row (HSNval 19.42 proto) fed it 32 kHz audio, so
+# it is not directly comparable — this arm uses AudioMAE's native 16 kHz
+# filterbank and should land above it. See docs/external_baselines.md.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: audiomae
+  - override /module/model: proto/audiomae
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      #data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      data/datasets: train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/audiomae.ckpt

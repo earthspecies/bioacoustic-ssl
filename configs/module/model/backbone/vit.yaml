@@ -1,0 +1,25 @@
+# Our own ViT-B/16 encoder geometry, shared by every arm that probes one of our
+# MAE checkpoints (linear/vit, proto/vit, layerwise/vit) so it is stated
+# once rather than three times.
+#
+# (n_mels, frames) input, token grid (8, 32), 257 tokens at 5 s.
+# `qkv_norm: true` — our pretraining used QK-norm, unlike the published
+# baselines. Pair with `data/transforms=default` (or `multiclass`).
+#
+# Deliberately independent of `vit_external.yaml` rather than layered on top of
+# it: that file describes the published baselines' geometry, and the two must be
+# free to drift apart.
+img_size: [128, 512]
+patch_size: 16
+in_chans: 1
+embed_dim: 768
+depth: 12
+num_heads: 12
+mlp_ratio: 4.0
+drop_rate: 0.0
+attn_drop_rate: 0.0
+drop_path_rate: 0.1
+norm_eps: 1.0e-6
+grad_checkpoint: false
+pos_embed_type: sinusoidal_2d
+qkv_norm: true

@@ -1,0 +1,98 @@
+# PupuJEPA (JEPA on XenoCanto + iNaturalist + AudioSet) input pipeline.
+#
+# Waveform stages match `default.yaml` except `PeakNormalize` is dropped, for
+# the same reason as the birdmae arm: the front-end is a natural-log mel of the
+# STFT *magnitude*, so it is not scale invariant, and PupuJEPA's -4.0900 /
+# 2.0242 constants were fitted on non-peak-normalised audio. Consequence when
+# comparing arms: MeanMix combines clips at their native levels rather than
+# level-matched.
+#
+# The front-end follows PupuJEPA's own `_log_mel`: 24 kHz, n_fft 1024, hop 240,
+# win 1024, 128 mels, 0-12 kHz, reflect-pad 392 with center=False, slaney mel
+# basis, log floor 1e-5, (x + 4.0900) / 2.0242, then a final transpose to the
+# (frames, n_mels) layout its patch embedding expects.
+#
+# No `BatchPadding` stage, unlike every other arm. `WavePadding` already fixes
+# the waveform at 160_000 samples (5 s @ 32 kHz), the resample makes that
+# 120_000 @ 24 kHz, and with center=False the frame count is exactly
+# samples / hop = 500. Patch (4, 16) then gives a (125, 8) grid = 1000 tokens
+# with zero padding and no cropping, because PupuJEPA's RoPE is generated per
+# input grid rather than read out of a fixed positional table. Note 1000 tokens
+# is ~4x the 257 of the ViT-B/16 arms (the patch is 4 frames wide, not 16), so
+# this arm costs ~4-6x per step and may need a smaller batch size.
+#
+# Pair with `module/model=proto/pupujepa` (or `layerwise/pupujepa`), and
+# leave `trainer.resume_from_checkpoint=null`: this arm loads its weights at
+# construction.
+- _target_: soundscape_ssl.data.transforms.TimeShift
+  p: 1.0
+  output_length: 5.0
+  sample_rate: 32000
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.ToTensor
+  keys: [audio]
+  _stage_: [train, test]
+# Dropped deliberately — see header. Left commented for a sensitivity check.
+#- _target_: soundscape_ssl.data.transforms.PeakNormalize
+#  target_key: audio
+#  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+  num_classes: ${data.num_classes}
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.MeanMix
+  p: 0.9
+  max_samples: 3
+  label_key: label
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.RollingWindow
+  p: 1.0
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+  transform:
+    _target_: torch_audiomentations.Gain
+    p: 0.6
+    min_gain_in_db: -18
+    max_gain_in_db: 0
+    sample_rate: 32_000
+    output_type: dict
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.padding.WavePadding
+  _stage_: [train, test]
+- _target_: torch.utils.data.default_collate
+  _partial_: true
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+  transform:
+    _target_: torchaudio.transforms.Resample
+    orig_freq: 32000
+    new_freq: 24000
+  audio_key: audio
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.spectrogram.BatchPupuMel
+  sample_rate: 24000
+  n_fft: 1024
+  hop_length: 240
+  win_length: 1024
+  n_mels: 128
+  f_min: 0
+  f_max: 12000
+  mean: -4.089994845986366
+  std: 2.0242277159094813
+  _stage_: [train, test]
+# this combines time and freq masking
+#
+# Masks the (n_mels, frames) layout, as in `default.yaml`, so time_mask_param
+# 100 covers at most 100/500 = 20 % of the clip — the same fraction the other
+# arms get from 100/512.
+- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+  transform:
+    _target_: torchaudio.transforms.SpecAugment
+    n_time_masks: 1
+    time_mask_param: 100
+    freq_mask_param: 50
+    n_freq_masks: 1
+    iid_masks: True
+  _stage_: [train]
+# must stay last: PupuJEPA expects (B, 1, frames, n_mels), upstream's `flip_ft`
+- _target_: soundscape_ssl.data.transforms.spectrogram.TransposeSpec
+  _stage_: [train, test]

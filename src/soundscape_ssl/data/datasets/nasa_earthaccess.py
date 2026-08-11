@@ -64,8 +64,10 @@ _CURATED_DIR = Path(__file__).resolve().parents[4] / "curated" / "nasa"
 #: Directory holding the *materialized* event audio: one subdir per event split,
 #: each a set of ``shard_*.parquet`` (metadata) beside ``shard_*.bin`` (the
 #: concatenated raw PCM) written by ``scripts/materialize_nasa_events.py`` (the
-#: 5 s slice pre-downloaded and resampled to 32 kHz). The audio blob is
-#: memory-mapped at read time so DataLoader workers share one copy.
+#: 5 s slice pre-downloaded and resampled to 32 kHz) or by
+#: ``scripts/materialize_nasa_regions.py`` (a 10-60 s merged detection region per
+#: row, cropped at read time). The audio blob is memory-mapped at read time so
+#: DataLoader workers share one copy.
 _MATERIALIZED_DIR = Path(__file__).resolve().parents[4] / "curated" / "nasa_audio"
 
 #: Split name -> source path.  Recording splits point at a precomputed metadata
@@ -83,6 +85,8 @@ _SPLIT_PATHS = {
     "S2L_RANDOM": str(_MATERIALIZED_DIR / "S2L_RANDOM"),
     "BIOSCAPE_PEAK": str(_MATERIALIZED_DIR / "BIOSCAPE_PEAK"),
     "S2L_PEAK": str(_MATERIALIZED_DIR / "S2L_PEAK"),
+    "BIOSCAPE_REGIONS": str(_MATERIALIZED_DIR / "BIOSCAPE_REGIONS"),
+    "S2L_REGIONS": str(_MATERIALIZED_DIR / "S2L_REGIONS"),
 }
 
 #: Splits whose records are curated 5 s events (audio is partial-read per event)
@@ -91,12 +95,18 @@ _EVENT_SPLITS = {"BIOSCAPE_EVENTS", "S2L_EVENTS"}
 
 #: Splits whose audio was pre-downloaded + resampled to local parquet shards by
 #: scripts/materialize_nasa_events.py (``*_EVENTS_LOCAL``), the §2.1 random arm
-#: scripts/curate_nasa_random.py (``*_RANDOM``), or the §2.1 energy-peak arm
-#: scripts/curate_nasa_peak.py (``*_PEAK``).  Read locally: no network, no login.
+#: scripts/curate_nasa_random.py (``*_RANDOM``), the §2.1 energy-peak arm
+#: scripts/curate_nasa_peak.py (``*_PEAK``), or scripts/materialize_nasa_regions.py
+#: (``*_REGIONS``).  Read locally: no network, no login.
+#:
+#: ``*_REGIONS`` rows are variable length (a 10-60 s merged detection region)
+#: rather than a fixed 5 s slice, and are meant to be read with
+#: ``random_crop_seconds`` set so each access draws a different window.
 _MATERIALIZED_SPLITS = {
     "BIOSCAPE_EVENTS_LOCAL", "S2L_EVENTS_LOCAL",
     "BIOSCAPE_RANDOM", "S2L_RANDOM",
     "BIOSCAPE_PEAK", "S2L_PEAK",
+    "BIOSCAPE_REGIONS", "S2L_REGIONS",
 }
 
 #: fsspec read-block size for event slices.  Must be > 0 so the HTTP file stays
@@ -194,12 +204,18 @@ class NASAEarthAccess(Dataset):
         an Earthdata login).  When ``False``, items are metadata-only (no login,
         no download).  Non-audio granules are dropped in either case.
     random_crop_seconds : float, optional
-        Recording splits only.  When set, a single random ``random_crop_seconds``
-        window is HTTP-range partial-read from each granule per access (a fresh
-        offset every ``__getitem__``), instead of downloading + decoding the full
-        WAV.  This mirrors the XenoCanto "random segment per file per epoch"
-        sampling; the crop offset is drawn here (not in ``TimeShift``) because the
-        authenticated session lives on this class.  ``None`` keeps the full read.
+        When set, each access returns a random ``random_crop_seconds`` window
+        instead of the whole stored clip, with a fresh offset every
+        ``__getitem__`` — mirroring the XenoCanto "random segment per file per
+        epoch" sampling.  ``None`` keeps the full read.
+
+        On *recording* splits the window is HTTP-range partial-read from the
+        granule rather than downloading the full WAV; the offset is drawn here
+        (not in ``TimeShift``) because the authenticated session lives on this
+        class.  On *materialized region* splits (``*_REGIONS``) the window is
+        sliced out of the memory-mapped blob, so only those bytes are read — this
+        is what gives a stored 10-60 s region a different 5 s crop per epoch, the
+        jitter the fixed 5 s ``*_EVENTS_LOCAL`` store cannot provide.
     backend : BackendType, optional
         Accepted for interface compatibility.
     streaming : bool, optional
@@ -501,19 +517,28 @@ class NASAEarthAccess(Dataset):
 
         if self.decode_audio:
             if self.split in _MATERIALIZED_SPLITS:
-                # Pre-downloaded + resampled audio: slice the one event's bytes
+                # Pre-downloaded + resampled audio: slice the stored clip's bytes
                 # from the memory-mapped shard blob and decode locally (no
                 # network, no login, no per-worker copy of the audio).
                 mm = self._shard_mmap(record["_shard"])
                 n = int(record["num_samples"])
                 off = int(record["audio_offset"])
-                if record["audio_dtype"] == "int16":
-                    raw = mm[off : off + n * 2]
-                    audio = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
-                else:
-                    raw = mm[off : off + n * 4]
-                    audio = np.frombuffer(raw, dtype="<f4").astype(np.float32)
                 sr = int(record["sample_rate"])
+                width = 2 if record["audio_dtype"] == "int16" else 4
+                if self.random_crop_seconds is not None:
+                    # Region splits store a 10-60 s clip per row: draw a fresh
+                    # window inside it on every access and read only those bytes,
+                    # so a stored region is never re-seen as the same 5 s view.
+                    n_crop = int(round(self.random_crop_seconds * sr))
+                    if n > n_crop:
+                        off += random.randint(0, n - n_crop) * width
+                        n = n_crop
+                raw = mm[off : off + n * width]
+                audio = (
+                    np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+                    if width == 2
+                    else np.frombuffer(raw, dtype="<f4").astype(np.float32)
+                )
             else:
                 try:
                     audio, sr = self._decode_remote(record)

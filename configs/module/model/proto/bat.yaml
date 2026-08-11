@@ -1,0 +1,15 @@
+# BAT ViT-B/16 (AudioSet-2M) with the shared prototypical head. Backbone, weight
+# loading and geometry live in `backbone/bat` — note in particular that weights
+# arrive at construction, so `trainer.resume_from_checkpoint` must be null.
+defaults:
+  - /module/model/backbone/bat@_here_
+  - _self_
+
+_target_: soundscape_ssl.models.BatProtoFloat
+
+# Classification head — identical to the other proto arms, so the comparison is
+# about the backbone. The head applies our focal-similarity subtraction
+# (patch - cls), which BAT itself does not do.
+num_classes: ${data.num_classes}
+num_prototypes: 20
+head_drop: 0.0

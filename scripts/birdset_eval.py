@@ -116,7 +116,8 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
     _ = iter(test_loader)
 
     model = instantiate(cfg.module.model)
-    model.freeze_backbone()
+    if cfg.module.get("freeze_backbone", True):
+        model.freeze_backbone()
 
     effective_lr = cfg.module.optimizer.base_lr * cfg.data.loaders.train.batch_size / 256
     no_wd = ["cls_token", "pos_embed"]
@@ -125,7 +126,8 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
         weight_decay=cfg.module.optimizer.weight_decay,
         no_weight_decay_list=no_wd,
         layer_decay=cfg.module.optimizer.layer_decay,
-        prototype_lr=cfg.module.optimizer.get("prototype_lr", None)
+        prototype_lr=cfg.module.optimizer.get("prototype_lr", None),
+        layer_weights_lr=cfg.module.optimizer.get("layer_weights_lr", None),
     )
     optimizer = AdamW(param_groups, lr=effective_lr, betas=tuple(cfg.module.optimizer.betas))
 

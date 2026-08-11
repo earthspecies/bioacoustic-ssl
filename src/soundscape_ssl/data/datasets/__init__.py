@@ -1,3 +1,4 @@
+from . import _gcs_anon  # noqa: F401  (force anonymous GCS access; side-effect import)
 from .a2o_site import A2ODetections, A2OSite
 from .arbimon import Arbimon, ArbimonDetections, ArbimonLegacy
 from .audioset import AudioSetRaw

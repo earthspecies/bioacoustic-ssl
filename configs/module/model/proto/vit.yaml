@@ -1,0 +1,10 @@
+defaults:
+  - /module/model/backbone/vit@_here_
+  - _self_
+
+_target_: soundscape_ssl.models.ViTProtoFloat
+
+# Classification head
+num_classes: ${data.num_classes}
+num_prototypes: 20
+head_drop: 0.0

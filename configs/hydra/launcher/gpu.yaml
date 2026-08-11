@@ -1,0 +1,46 @@
+# @package hydra.launcher
+_target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
+submitit_folder: ${hydra.sweep.dir}/.submitit/%j
+timeout_min: 2880
+cpus_per_task: 12 # for a100
+gpus_per_node: null
+tasks_per_node: 1
+mem_gb: 120
+nodes: 1
+name: eval_birdset
+stderr_to_stdout: true
+partition: a100-40
+qos: null
+comment: null
+constraint: null
+exclude: null #node[0-3].omnia.cluster #gpu-v100-[1-4]
+gres: gpu:1
+cpus_per_gpu: null
+gpus_per_task: null
+mem_per_gpu: null
+mem_per_cpu: null
+account: null
+signal_delay_s: 120
+max_num_timeout: 0
+additional_parameters: {}
+array_parallelism: 3
+setup:
+  - unset SLURM_CPU_BIND
+  - unset SLURM_CPU_BIND_TYPE
+  - unset SLURM_CPU_BIND_LIST
+  - unset SLURM_HINT
+  - unset SBATCH_CPU_BIND
+  - unset SBATCH_CPU_BIND_TYPE
+  - unset UV_PROJECT_ENVIRONMENT
+  - date
+  - cd ~/soundscape_mae
+  - export VIRTUAL_ENV=/scratch/moritz_earthspecies_org/venvs/${oc.env:SLURM_JOB_ID}
+  # Secrets + shared env (WANDB_API_KEY, HF_*, HYDRA_FULL_ERROR, and the
+  # persistent OS CA bundle GCS OAuth token refresh needs — the per-job venv on
+  # /scratch and its certifi copy are ephemeral and can vanish mid-run).
+  # Same source the scripts/slurm/*.sh launchers use; see .env.example.
+  - set -a
+  - source $HOME/soundscape_mae/.env
+  - set +a
+  # - export ESP_DATA_HOME=gs://esp-ml-datasets
+  - uv sync --active

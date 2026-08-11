@@ -1,0 +1,33 @@
+# @package _global_
+
+# XenoCanto + NASA detection REGIONS at a balanced 50/50 batch split. Single-factor
+# change against pretrain_xc_nasa_regions.yaml: same datasets, same region store,
+# only the mixing ratio moves (25% -> 50% PAM).
+#
+# This is a deliberate ~6x oversample of PAM, not a proportional mix: by content
+# the pool is 10,890 h XC (596,522 recordings, mean 66 s) against 941 h NASA
+# (43,517 BioScape + 85,521 S2L regions), i.e. NASA is 8% of the audio.
+#
+# The region store is what makes 50% affordable. Repeats of each distinct 5 s
+# window over a 400k run at batch 512 (204.8M draws):
+#
+#   events @ 25% PAM (1ddx8a1e/qou0jyuf)   NASA 330x   XC 20x
+#   regions @ 25% PAM (xc_nasa_regions)    NASA  76x   XC 20x
+#   regions @ 50% PAM (this config)        NASA 151x   XC 13x
+#
+# So the balanced arm still re-draws PAM windows less than half as often as the
+# arms that produced the BirdSet null, and every draw is a fresh crop offset.
+# Per-pool passes at 400k: XC ~172, BioScape ~781, S2L ~800.
+#
+# 85:171 keeps the BioScape:S2L ratio at 1:2.01, matching both their region counts
+# (1:1.97) and their hours (1:2.04).
+
+defaults:
+  - override /data: pretrain
+  - override /data/datasets: [pretrain/xc_raw, pretrain/nasa_bioscape_regions_local, pretrain/nasa_s2l_regions_local]
+
+data:
+  weights: [256, 85, 171]  # [xc_raw, nasa_bioscape_regions, nasa_s2l_regions]; sums to batch_size
+
+  cache:
+    enabled: false

@@ -1,0 +1,10 @@
+defaults:
+  - /module/model/backbone/vit@_here_
+  - _self_
+
+_target_: soundscape_ssl.models.ViTClassifier
+
+# Classification head
+num_classes: ${data.num_classes}
+pool: cls       # "cls" | "gap" | "cls_gap"
+head_drop: 0.0

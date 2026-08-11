@@ -1,0 +1,30 @@
+# Encoder geometry of the published ViT-B/16 baselines that DO load into our
+# `ViTEncoder` — Bird-MAE-Base and AudioMAE. Both take (frames, n_mels) input,
+# so `img_size` is the transpose of ours and the token grid is (32, 8).
+# `qkv_norm: false` — neither was trained with QK-norm.
+#
+# `pos_embed_type` stays sinusoidal_2d, but the buffer is overwritten on load in
+# both cases, which is what makes the forward pass bit-exact:
+#   * Bird-MAE ships its own pos_embed in the checkpoint.
+#   * AudioMAE's 513-token table is re-gridded onto the (8, 32) sincos grid by
+#     scripts/convert_external_ckpt.py; our generator would otherwise build that
+#     grid the other way round.
+#
+# Shared by the birdmae/audiomae arms, whose geometry is identical — they differ
+# only in their front-end (`data/transforms`) and their checkpoint, both pinned
+# per arm in the corresponding sweep. BAT and PupuJEPA are NOT here: they do not
+# load into `ViTEncoder` at all (see proto/bat.yaml / backbone/pupujepa.yaml).
+img_size: [512, 128]
+patch_size: 16
+in_chans: 1
+embed_dim: 768
+depth: 12
+num_heads: 12
+mlp_ratio: 4.0
+drop_rate: 0.0
+attn_drop_rate: 0.0
+drop_path_rate: 0.1
+norm_eps: 1.0e-6
+grad_checkpoint: false
+pos_embed_type: sinusoidal_2d
+qkv_norm: false

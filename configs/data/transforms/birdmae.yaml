@@ -1,0 +1,72 @@
+# Bird-MAE (DBD-research-group/Bird-MAE-Base) input pipeline.
+#
+# Waveform stages match `default.yaml` except `PeakNormalize` is dropped: kaldi
+# log-mel energies are not scale invariant, and Bird-MAE's mean/std were fitted
+# on non-peak-normalised audio (BatchKaldiFbank strips the DC offset instead, as
+# Bird-MAE's own pipeline does). Consequence when comparing arms: MeanMix now
+# combines clips at their native levels rather than level-matched.
+#
+# The front-end follows Bird-MAE's feature extractor: kaldi fbank at 32 kHz,
+# min-value padding to 512 frames, (x + 7.2) / 8.86 normalisation, and a final
+# transpose to the (frames, n_mels) layout its patch embedding expects.
+# Pair with `module/model=proto/birdmae`.
+- _target_: soundscape_ssl.data.transforms.TimeShift
+  p: 1.0
+  output_length: 5.0
+  sample_rate: 32000
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.ToTensor
+  keys: [audio]
+  _stage_: [train, test]
+# Calibration check on 512 clean XC-train clips (augmentations off): our raw
+# log-mel is -7.2975 / 4.3587 against Bird-MAE's fitted -7.20 / 4.43, so no peak
+# normalisation is the correctly calibrated choice here. Peak normalising would
+# land at ~-4.8, i.e. 2.4 nats too loud. Left commented for a sensitivity check.
+#- _target_: soundscape_ssl.data.transforms.PeakNormalize
+#  target_key: audio
+#  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+  num_classes: ${data.num_classes}
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.MeanMix
+  p: 0.9
+  max_samples: 3
+  label_key: label
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.RollingWindow
+  p: 1.0
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+  transform:
+    _target_: torch_audiomentations.Gain
+    p: 0.6
+    min_gain_in_db: -18
+    max_gain_in_db: 0
+    sample_rate: 32_000
+    output_type: dict
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.padding.WavePadding
+  _stage_: [train, test]
+- _target_: torch.utils.data.default_collate
+  _partial_: true
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.spectrogram.BatchKaldiFbank
+  sample_rate: 32000
+  target_length: 512
+  mean: -7.2
+  std: 4.43
+  pad_value: min
+  _stage_: [train, test]
+# this combines time and freq masking
+- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+  transform:
+    _target_: torchaudio.transforms.SpecAugment
+    n_time_masks: 1
+    time_mask_param: 100
+    freq_mask_param: 50
+    n_freq_masks: 1
+    iid_masks: True
+  _stage_: [train]
+# must stay last: Bird-MAE expects (B, 1, frames, n_mels)
+- _target_: soundscape_ssl.data.transforms.spectrogram.TransposeSpec
+  _stage_: [train, test]

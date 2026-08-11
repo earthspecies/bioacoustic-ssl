@@ -19,6 +19,10 @@ def get_layer_id_for_vit(name: str, num_layers: int) -> int:
         return 0
     elif name.startswith("patch_embed"):
         return 0
+    elif name.startswith("pre_norm"):
+        # BAT normalises once before block 0, so it belongs to the input stage,
+        # not to the head group the fall-through below would put it in.
+        return 0
     elif name.startswith("blocks."):
         return int(name.split(".")[1]) + 1
     else:
@@ -31,6 +35,7 @@ def param_groups_lrd(
     no_weight_decay_list: list[str] | None = None,
     layer_decay: float = 0.75,
     prototype_lr: float | None = None,
+    layer_weights_lr: float | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Parameter groups for layer-wise lr decay.
@@ -41,14 +46,35 @@ def param_groups_lrd(
         weight_decay: Weight decay applied to non-excluded parameters.
         no_weight_decay_list: Parameter name patterns exempt from weight decay.
         layer_decay: Multiplicative factor per layer for lr decay.
-        prototype_lr: When set, any parameter whose name contains
-            ``"prototype_vectors"`` (e.g. ``head.prototype_vectors`` in
-            :class:`ViTProtoFloat`) is removed from the layer-decay groups and
-            placed in a dedicated group with this fixed absolute learning rate.
-            Leave as ``None`` (default) for standard :class:`ViTClassifier` usage.
+        prototype_lr: When set, all non-backbone (head-side) trainable params are
+            removed from the layer-decay groups and placed in a dedicated group
+            with this fixed absolute learning rate. This covers the prototype
+            head (``head.prototype_vectors``, ``head.linear.*``) as well as the
+            layerwise-fusion params of :class:`ViTProtoLayerwise`
+            (``layer_weights``, ``layer_norms.*``). The layer-decay / ``base_lr``
+            groups are then left with genuine backbone params only. Leave as
+            ``None`` (default) for standard :class:`ViTClassifier` usage.
+        layer_weights_lr: When set (requires ``prototype_lr``), the layerwise
+            softmax-fusion weights (``layer_weights`` of
+            :class:`ViTProtoLayerwise`) are split out of the head group into
+            their own group at this fixed absolute learning rate — useful to run
+            the 12-dim block-selection softmax cooler than the head so it does
+            not collapse onto a single block prematurely. When ``None`` (default)
+            ``layer_weights`` stays folded into the head group at ``prototype_lr``.
     """
     if no_weight_decay_list is None:
         no_weight_decay_list = []
+
+    def _is_layer_weights(name: str) -> bool:
+        return name.startswith("layer_weights")
+
+    def _is_head_param(name: str) -> bool:
+        return (
+            "prototype_vectors" in name
+            or "head.linear" in name
+            or _is_layer_weights(name)
+            or name.startswith("layer_norms")
+        )
 
     param_group_names: dict[str, dict[str, Any]] = {}
     param_groups: dict[str, dict[str, Any]] = {}
@@ -64,8 +90,9 @@ def param_groups_lrd(
         if not p.requires_grad:
             continue
 
-        # Prototype vectors get their own fixed-lr group (see below).
-        if prototype_lr is not None and "prototype_vectors" in n:
+        # Head-side params (prototype head + layerwise fusion) get their own
+        # fixed-lr group (see below); only backbone params stay on base_lr.
+        if prototype_lr is not None and _is_head_param(n):
             continue
 
         if p.ndim == 1 or n in no_weight_decay_list or any(n.endswith(pat) for pat in no_weight_decay_list):
@@ -94,25 +121,52 @@ def param_groups_lrd(
         param_group_names[group_name]["params"].append(n)
         param_groups[group_name]["params"].append(p)
 
-    # Add a dedicated group for prototype vectors when prototype_lr is requested.
+    # Add a dedicated fixed-lr group for all head-side params (prototype head +
+    # layerwise fusion) when prototype_lr is requested. When layer_weights_lr is
+    # also set, the block-selection softmax weights are split into their own
+    # group so they can run cooler than the rest of the head.
     if prototype_lr is not None:
-        proto_names = [
+        split_lw = layer_weights_lr is not None
+
+        def _in_head(name: str) -> bool:
+            return _is_head_param(name) and not (split_lw and _is_layer_weights(name))
+
+        head_names = [
             n for n, p in model.named_parameters()
-            if p.requires_grad and "prototype_vectors" in n
+            if p.requires_grad and _in_head(n)
         ]
-        proto_params = [
+        head_params = [
             p for n, p in model.named_parameters()
-            if p.requires_grad and "prototype_vectors" in n
+            if p.requires_grad and _in_head(n)
         ]
-        if proto_params:
-            param_group_names["prototypes"] = {
+        if head_params:
+            param_group_names["head"] = {
                 "lr": prototype_lr,
-                "params": proto_names,
+                "params": head_names,
             }
-            param_groups["prototypes"] = {
+            param_groups["head"] = {
                 "lr": prototype_lr,
-                "params": proto_params,
+                "params": head_params,
             }
+
+        if split_lw:
+            lw_names = [
+                n for n, p in model.named_parameters()
+                if p.requires_grad and _is_layer_weights(n)
+            ]
+            lw_params = [
+                p for n, p in model.named_parameters()
+                if p.requires_grad and _is_layer_weights(n)
+            ]
+            if lw_params:
+                param_group_names["layer_weights"] = {
+                    "lr": layer_weights_lr,
+                    "params": lw_names,
+                }
+                param_groups["layer_weights"] = {
+                    "lr": layer_weights_lr,
+                    "params": lw_params,
+                }
 
     return list(param_groups.values()), param_group_names
 

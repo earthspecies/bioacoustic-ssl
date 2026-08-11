@@ -2,10 +2,10 @@ accelerator: gpu
 devices: 1
 strategy: auto
 precision: bf16-mixed
-max_steps: 1000000 # absolute target; 200k original + 200k warm-restart continuation
+max_steps: 400000 # absolute target; 200k original + 200k warm-restart continuation
 warm_restart: false # fresh cosine (warmup→peak→min_lr) over the remaining steps; keeps weights+optimizer+step, ignores the checkpoint's decayed LR state
 grad_clip: 1.0
 log_every_n_steps: 200
 save_every_n_steps: 20000
-eval_every_n_steps: 5000   # representation eval (silhouette/NMI/ARI on POW) → wandb; null to disable
-resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/outputs/2026-07-16/07-07-44/checkpoints/step_0740000.ckpt #/home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt # point at your 200k-step checkpoint
+eval_every_n_steps: 5000   # representation eval (LP/GAP cmap/auroc POW) → wandb; null to disable
+resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/outputs/2026-08-09/11-19-06/checkpoints/step_0180000.ckpt #/home/moritz_earthspecies_org/soundscape_mae/outputs/2026-07-27/08-30-48/checkpoints/step_0780000.ckpt #/home/moritz_earthspecies_org/soundscape_mae/outputs/2026-07-20/09-26-11/checkpoints/step_0920000.ckpt #/home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt # point at your 200k-step checkpoint

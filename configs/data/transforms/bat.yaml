@@ -1,0 +1,100 @@
+# BAT (lrauch/BAT-vit-b16-pretrainedAS2M, AudioSet-2M) input pipeline.
+#
+# Faithful to BAT's own `processing_bat.py`: MelSpectrogram(16 kHz, n_fft 1024,
+# hop 160, n_mels 128, f_min 0, power 2) -> AmplitudeToDB("power", top_db=80) ->
+# per-sample min-max to [0, 1] -> zero-pad/crop to 1024 frames -> transpose to
+# (frames, n_mels). hop 160 @ 16 kHz = 100 frames/s, so 1024 frames is a
+# **10.24 s window**: our 5 s clips give 501 frames, i.e. ~51 % zero padding and
+# 513 tokens. That asymmetry against every other arm's 5 s / 257 tokens is a
+# property of this baseline (BAT publishes no short-clip recipe and its own
+# truncation path slices pos_embed incoherently — see docs/external_baselines.md
+# §7) and must be stated wherever the comparison appears.
+#
+# Two things are simpler here than for the birdmae/audiomae arms:
+#   * No fitted mean/std constants — min-max is per clip, so there is nothing to
+#     calibrate on our corpus and no train/test level mismatch to reason about.
+#   * The pad value matches trivially: min-max runs *before* padding, so 0 is the
+#     clip's own floor, which is exactly what `BatchPadding(pad_value: 0.0)` writes.
+#
+# `PeakNormalize` is absent and would be a no-op if added: mel -> dB -> per-sample
+# min-max is gain invariant. For the same reason the shared `Gain` augmentation
+# has no effect on this arm — it is applied after `MeanMix`, so it is a global
+# scale by then. It is kept anyway so the waveform stack stays identical across
+# arms; only the front-end differs.
+#
+# Pair with `module/model=proto/bat`.
+- _target_: soundscape_ssl.data.transforms.TimeShift
+  p: 1.0
+  output_length: 5.0
+  sample_rate: 32000
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.ToTensor
+  keys: [audio]
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+  num_classes: ${data.num_classes}
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.MeanMix
+  p: 0.9
+  max_samples: 3
+  label_key: label
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.RollingWindow
+  p: 1.0
+  _stage_: [train]
+# No-op for this arm (see header) — kept so the augmentation stack is shared.
+- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+  transform:
+    _target_: torch_audiomentations.Gain
+    p: 0.6
+    min_gain_in_db: -18
+    max_gain_in_db: 0
+    sample_rate: 32_000
+    output_type: dict
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.padding.WavePadding
+  _stage_: [train, test]
+- _target_: torch.utils.data.default_collate
+  _partial_: true
+  _stage_: [train, test]
+- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+  transform:
+    _target_: torchaudio.transforms.Resample
+    orig_freq: 32000
+    new_freq: 16000
+  audio_key: audio
+  _stage_: [train, test]
+# Must run before padding: BAT min-maxes the unpadded clip, so the pad value 0
+# lands on the clip's own floor rather than mid-range.
+- _target_: soundscape_ssl.data.transforms.spectrogram.BatchMinMaxSpectrogram
+  sample_rate: 16000
+  n_fft: 1024
+  hop_length: 160
+  n_mels: 128
+  f_min: 0
+  top_db: 80
+  _stage_: [train, test]
+# this combines time and freq masking
+#
+# Placed before padding, unlike issue 03's sketch and like `default.yaml`. With
+# 51 % padding, masking afterwards would (a) drop ~half of all time masks onto
+# padding, where they are no-ops, halving the effective augmentation relative to
+# the other arms, and (b) fill masks with `specgram.mean()`, which the padding
+# dilutes toward 0. Masking the 501 real frames keeps ~100/501 ≈ 20 % maximum
+# time coverage, matching the other arms' 100/512.
+- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+  transform:
+    _target_: torchaudio.transforms.SpecAugment
+    n_time_masks: 1
+    time_mask_param: 100
+    freq_mask_param: 50
+    n_freq_masks: 1
+    iid_masks: True
+  _stage_: [train]
+- _target_: soundscape_ssl.data.transforms.padding.BatchPadding
+  target_shape: [128, 1024]
+  pad_value: 0.0
+  _stage_: [train, test]
+# must stay last: BAT expects (B, 1, frames, n_mels)
+- _target_: soundscape_ssl.data.transforms.spectrogram.TransposeSpec
+  _stage_: [train, test]

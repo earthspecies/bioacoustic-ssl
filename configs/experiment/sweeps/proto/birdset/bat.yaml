@@ -1,0 +1,49 @@
+# @package _global_
+
+# Frozen prototypical probing of the published BAT ViT-B/16 (AudioSet-2M) encoder
+# across the BirdSet downstream tasks, using BAT's own preprocessing (16 kHz mel,
+# hop 160, per-sample min-max, 1024 frames) rather than ours.
+#
+# Everything except the backbone and its front-end is inherited unchanged from
+# the other proto-probing sweeps (base_lr, prototype_lr, layer_decay, loss,
+# metrics, max_steps), so this is a clean cross-model contrast.
+#
+# No checkpoint step: `proto/bat` pulls the weights from the Hub at construction
+# with `strict=True`, so `resume_from_checkpoint` is nulled below. Leaving the
+# `trainer/train.yaml` default in place would hand `_load_checkpoint` one of our
+# own XC checkpoints, whose `encoder.`-stripped keys match nothing in this model
+# — `strict=False` would report that and carry on, i.e. fail silently.
+#
+# Caveat for the comparison: this arm sees a 10.24 s window (513 tokens, ~51 % of
+# it zero padding) against every other arm's 5 s / 257 tokens. See
+# docs/external_baselines.md §7.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: bat
+  - override /module/model: proto/bat
+
+module:
+  # Frozen encoder: only head.prototype_vectors and head.linear.* train.
+  # This is birdset_eval.py's default, stated explicitly to contrast with
+  # sweeps/finetune/birdset/vit.yaml.
+  freeze_backbone: true
+
+# `BAT` stands in for the checkpoint token the other arms interpolate here, so
+# the name keeps the <split>-<backbone>-<seed> shape the eval-aggregation
+# tooling parses.
+run_name: ${data.datasets.test.split}-BAT-${seed}
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      # Must be nulled *here*, not in a `trainer:` block above: train.yaml's
+      # defaults list merges the `trainer` group after `experiment`, so only a
+      # sweeper/CLI override outranks trainer/train.yaml's default path. Left
+      # set, `_load_checkpoint` would strip `encoder.` off one of our own XC
+      # checkpoints, match nothing in this model, and report that under
+      # strict=False instead of failing.
+      trainer.resume_from_checkpoint: 'null'
+      data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh

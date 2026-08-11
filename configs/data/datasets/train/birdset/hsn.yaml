@@ -5,6 +5,7 @@ train:
   dataset_name: xeno-canto-raw
   sample_rate: 32000
   split: all
+  version: 0.2.0
   output_take_and_give:
     audio_bytes: audio_bytes
     label: label

@@ -1,0 +1,24 @@
+# @package _global_
+
+# Layerwise prototypical probing of the published Bird-MAE-Base encoder: same
+# protocol and preprocessing as sweeps/proto/birdset/birdmae, but the head learns a
+# softmax-weighted sum over ALL transformer block outputs instead of probing only
+# the final layer (see ViTProtoLayerwise). For an MAE the last layers specialise
+# for reconstruction, so this also reads out *where* the transferable features
+# sit — directly comparable to the same readout on our own encoder.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: birdmae
+  - override /module/model: layerwise/birdmae
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-layerwise
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      #data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      data/datasets: train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/birdmae_base.ckpt

@@ -1,0 +1,15 @@
+# @package data.datasets.nasa_bioscape_regions
+
+# Materialized BioScape detection *regions* (scripts/materialize_nasa_regions.py):
+# one 10-60 s merged region per row instead of the fixed 5 s slice of
+# nasa_bioscape_events_local.yaml. random_crop_seconds draws a fresh window
+# inside the stored region on every access, so the same region is never re-seen
+# as the same 5 s view — the crop jitter XenoCanto gets for free.
+_target_: soundscape_ssl.data.datasets.NASAEarthAccess
+split: BIOSCAPE_REGIONS
+sample_rate: 32000
+n_records: -1
+random_crop_seconds: 5.0
+output_take_and_give:
+  audio: audio
+  sample_rate: sample_rate

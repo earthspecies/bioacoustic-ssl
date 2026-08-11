@@ -1,0 +1,26 @@
+# @package _global_
+
+# XenoCanto + NASA detection REGIONS. Single-factor change against
+# pretrain_xc_pam_new.yaml: the identical curated granule set (every granule
+# holding a >=0.7 detection), stored as 10-60 s merged regions and cropped to a
+# fresh random 5 s window per access instead of one fixed 5 s slice per detection.
+#
+# Why: the fixed-window store re-draws each identical 5 s view ~330x over a 400k
+# run at 25% PAM weight, against ~19x for XC whose crop offset is redrawn every
+# epoch. The region store cuts that to ~76x. If the NASA null on BirdSet is an
+# artefact of that repetition asymmetry, this is the run that shows it.
+#
+# Weights are unchanged at [384, 43, 85] (XC 75%), and stay ~epoch-matched across
+# the two collections because the region counts carry almost the same ratio as
+# the event counts did: 43,529 BioScape / 85,521 S2L regions -> ~395 and ~397
+# passes over each pool at 400k steps.
+
+defaults:
+  - override /data: pretrain
+  - override /data/datasets: [pretrain/xc_raw, pretrain/nasa_bioscape_regions_local, pretrain/nasa_s2l_regions_local]
+
+data:
+  weights: [384, 43, 85]  # [xc_raw, nasa_bioscape_regions, nasa_s2l_regions]
+
+  cache:
+    enabled: false

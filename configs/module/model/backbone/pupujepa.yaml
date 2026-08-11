@@ -1,0 +1,31 @@
+# PupuJEPA-Base encoder (I-JEPA on pooled XenoCanto + iNaturalist + AudioSet,
+# trained from scratch), shared by all three PupuJEPA arms.
+#
+# Like BAT and unlike birdmae/audiomae, this is not a `ViTEncoder`: PupuJEPA uses
+# RoPE instead of a `pos_embed`, SwiGLU MLPs and no CLS token, so it cannot load
+# into ours. It uses the vendored encoder (`models/architectures/pupujepa/`) and
+# is absent from `scripts/convert_external_ckpt.py`.
+#
+# Weights arrive at construction from `ckpt_path` (per submodule, `strict=True`),
+# so these arms need NO `trainer.resume_from_checkpoint` — set it to null, or the
+# eval script will load an unrelated encoder over the top. The probed weights are
+# the EMA `teacher.*` encoder, which is what upstream deploys at inference; the
+# student and predictor are never built.
+#
+# Geometry is fixed by the checkpoint: patch (4, 16) over a (frames, n_mels)
+# input. `img_size` only sets `patch_embed.grid_size` — RoPE is generated from
+# the actual input grid, so the real geometry comes from the front-end: 5 s @
+# 24 kHz = 500 frames -> (125, 8) grid -> 1000 tokens, no padding. That is ~4x
+# the 257 tokens of the ViT-B/16 arms, so ~4-6x the cost per step.
+# Pair with `data/transforms=pupujepa`.
+ckpt_path: /home/moritz_earthspecies_org/soundscape_mae/pupujepa_mvp/model.safetensors
+img_size: [500, 128]
+patch_size: [4, 16]
+in_chans: 1
+embed_dim: 768
+depth: 12
+num_heads: 12
+mlp_ratio: 4.0
+use_swiglu: true
+qk_norm: true
+drop_path_rate: 0.0

@@ -38,13 +38,17 @@ class AsymmetricLossMultiLabel(nn.Module):
 
         # Asymmetric Focusing
         if self.gamma_neg > 0 or self.gamma_pos > 0:
+            prev_grad = torch.is_grad_enabled()
             if self.disable_torch_grad_focal_loss:
                 torch.set_grad_enabled(False)
             self.xs_pos = self.xs_pos * self.targets
             self.xs_neg = self.xs_neg * self.anti_targets
             self.asymmetric_w = torch.pow(1 - self.xs_pos - self.xs_neg, self.gamma_pos * self.targets + self.gamma_neg * self.anti_targets)
             if self.disable_torch_grad_focal_loss:
-                torch.set_grad_enabled(True)
+                # Restore the caller's grad mode; hard-setting True here would
+                # clobber an outer torch.no_grad() (e.g. validation) and leak
+                # the autograd graph of every subsequent forward.
+                torch.set_grad_enabled(prev_grad)
             self.loss *= self.asymmetric_w
 
         return -self.loss.mean(dim=1).mean()

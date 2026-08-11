@@ -1,0 +1,30 @@
+# @package _global_
+
+# Prototypical probing of the published Bird-MAE-Base encoder across the BirdSet
+# downstream tasks, using Bird-MAE's own preprocessing (kaldi fbank at 32 kHz,
+# 512 frames, min-value pad, -7.2 / 4.43) rather than ours.
+#
+# The checkpoint is produced by `scripts/convert_external_ckpt.py birdmae_base`,
+# which the launcher script runs before fanning out. Model + transforms +
+# checkpoint are pinned together here: they must vary as a unit, so the sweeper
+# only crosses datasets and seeds.
+#
+# Reference: published proto-probing MAP is HSNval 43.84 / 49.97, POW 37.67 /
+# 51.73, PER 20.72 / 31.38, NES 28.11 / 37.80, UHH 26.46 / 29.97, NBP 62.68 /
+# 69.50, SSW 22.69 / 37.74, SNE 22.16 / 29.96 (the paper lists two ViT-B/16
+# rows). Our proto head is a simplified cosine variant of their PPNet, so treat
+# these as a band, not a target. See docs/external_baselines.md.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: birdmae
+  - override /module/model: proto/birdmae
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      #data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      data/datasets: train/birdset/per
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/birdmae_base.ckpt

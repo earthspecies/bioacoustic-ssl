@@ -275,9 +275,13 @@ class ViTProtoLayerwise(ViTProtoFloat):
         if self.layer_norms is not None:
             hidden = [ln(h) for ln, h in zip(self.layer_norms, hidden)]
 
-        stacked = torch.stack(hidden, dim=0)          # (L, B, N+1, D)
         w = torch.softmax(self.layer_weights, dim=0)  # (L,)
-        fused = (stacked * w.view(-1, 1, 1, 1)).sum(dim=0)  # (B, N+1, D)
+        # Weighted sum accumulated over the block list, avoiding a materialised
+        # (L, B, N+1, D) stack and its broadcast-product temporary. Kept
+        # out-of-place so gradients still flow to ``layer_weights``.
+        fused = w[0] * hidden[0]
+        for i in range(1, len(hidden)):
+            fused = fused + w[i] * hidden[i]  # (B, N+1, D)
 
         cls_features = fused[:, 0]
         patch_features = fused[:, 1:]

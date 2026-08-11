@@ -3,7 +3,7 @@
 defaults:
   - override /data: pretrain
   #- override /data/datasets: [pretrain/xc_lazy, pretrain/nasa_bioscape_events_local, pretrain/nasa_s2l_events_local, pretrain/sanctsound]
-  - override /data/datasets: [pretrain/xc_raw, pretrain/nasa_bioscape_events_local, pretrain/nasa_s2l_events_local]
+  - override /data/datasets: [pretrain/xc_raw, pretrain/nasa_bioscape_regions_local, pretrain/nasa_s2l_regions_local]
 
 
 data:
@@ -13,4 +13,3 @@ data:
 
   cache:
     enabled: false
-    size_limit_gb: 3000
