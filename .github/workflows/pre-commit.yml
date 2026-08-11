@@ -1,9 +1,12 @@
 name: ESP pre-commit
 
 on: # yamllint disable-line rule:truthy
-  push:
-    branches: [main]
-  pull_request:
+  # Temporarily disabled: manual-only while the research code is in flux.
+  # Re-enable by uncommenting the push/pull_request triggers below.
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  # pull_request:
 
 jobs:
   pre-commit:

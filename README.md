@@ -1,241 +1,261 @@
-# A Template for Python-Based Projects at Earth Species Project
+# soundscape_mae — unlabeled PAM in bioacoustic MAE pretraining
+
+Research code for a single question:
+
+> **Can unlabeled passive-acoustic-monitoring (PAM) / soundscape audio improve a
+> bioacoustic MAE backbone over Xeno-Canto (XC) alone — and if so, how must it be
+> selected?**
+
+The pipeline is: MAE-pretrain a ViT-B/16 on 5 s @ 32 kHz mel spectrograms from a
+weighted mix of corpora, then probe the frozen encoder on **BirdSet** (8 tasks)
+and **BEANS** (6 tasks) against published baselines (Bird-MAE-Base, AudioMAE, BAT,
+PupuJEPA).
+
+**Metric of record:** BirdSet cmAP, test-set mean over 7 tasks (POW = validation,
+always excluded).
+
+## Where things stand
+
+Numbers live in **[`EXPERIMENTS.md`](EXPERIMENTS.md)** (authoritative run ledger);
+the plan lives in **[`docs/research_overview.md`](docs/research_overview.md)** and
+**[`ROADMAP.md`](ROADMAP.md)**. Short version as of 2026-08:
+
+| Backbone | BirdSet layerwise cmAP (test mean, 7 tasks) |
+|---|---|
+| AudioMAE (AudioSet-2M) | 0.348 |
+| Bird-MAE-Base (our probe) | 0.429 |
+| XC 400k | 0.425 |
+| XC + NASA 400k | 0.436 |
+| **XC 1M** | **0.460** |
+| XC + NASA 1M | 0.457 |
+
+- Act 1 holds: our XC-only backbone reaches/exceeds Bird-MAE-Base parity.
+- **Schedule length is the only effect clearing the probe noise floor** (+0.035
+  for 400k→1M, 7/7 datasets; noise floor ≤0.001).
+- **NASA soundscapes are null on BirdSet** — sign flips with schedule, magnitude
+  at the noise floor — and mildly *diluting* along the step curve.
+- The only positive PAM signal is a small single-seed cross-domain gain on BEANS
+  (+0.006 mean, 3/5 up), which still lacks its matched layerwise XC-only control
+  (GATE 0 in `docs/research_overview.md` §5).
+
+## Layout
+
+```
+src/soundscape_ssl/     library (installed package)
+  data/
+    datasets/           one module per corpus (see table below)
+    transforms/         audio + batched-spectrogram transform pipeline
+    iterable_dataset.py MixedStreamingDataset — weighted infinite mix of map-style datasets
+    cache.py            optional per-item diskcache
+  models/
+    architectures/      mae, vit (encoder/decoder/classifier/proto heads), bat, pupujepa
+    components/         attention, block, mlp, patch_embed, pos_embed
+  training/
+    mae_pretrainer.py   Fabric pretraining loop
+    repr_eval.py        representation eval (kNN / ridge probe)
+  loss/, metrics/, eval/
+
+configs/                Hydra config tree (see "Configuration")
+scripts/                entry points + one-off curation / probe / verification scripts
+scripts/slurm/          sbatch wrappers, incl. sweeps/{proto,layerwise,linear,finetune}/
+docs/                   research_overview.md, external_baselines.md, agents/
+notebooks/              result aggregation (birdset_results*.ipynb, beans_results.ipynb)
+metadata/               NASA granule metadata (parquet + csv)
+curated/                curated NASA event/region indices and materialized audio
+tests/                  consistency (docstrings), unittests, integration
+```
+
+## Setup
+
+Package manager is **uv**; everything runs through `uv run`.
 
 ```bash
-rsync -av --progress \
-  --exclude='__pycache__' \
-  --exclude='.venv' \
-  --exclude='*.pyc' \
-  --exclude='.git' \
-  --exclude='.mypy_cache' \
-  --exclude='.ruff_cache' \
-  /home/moritz_earthspecies_org/soundscape_mae/ \
-  /mnt/home/soundscape_mae/
+uv sync                          # dev + gpu groups by default
+cp .env.example .env             # then fill in real values
+uv run python scripts/earthdata_login.py   # once per machine, for NASA Earthdata
 ```
 
-For 2025, ESP is focusing on credibility. In terms of code, credibility relies on **trust**, and trust in code comes from structure and correctness.
+Secrets and shared env (W&B, HF, Earthdata, CA bundle, HF cache) live in the
+gitignored `.env`. Python entry points call `load_dotenv()`; slurm scripts
+`source` it after the `#SBATCH` block. See `.env.example`.
 
-The main idea behind this repository is to ensure structure, consistency, and correctness for ESP Python projects.
+For a CPU-only box: `uv sync --group cpu` (the `cpu`/`gpu` groups conflict).
 
-This repository can be used as a starting point for new projects, and it helps maintain good practices through automatic testing and fixing. It can also be used to improve existing projects.
+## Pretraining
 
-This new coding structure is based on three main principles:
+```bash
+# single GPU
+uv run python scripts/pretrain.py experiment=pretrain/pretrain_xc
 
-1. Documentation.
+# multi-GPU
+uv run torchrun --nproc_per_node=4 scripts/pretrain.py \
+  experiment=pretrain/pretrain_xc trainer.devices=4 trainer.strategy=ddp
 
-2. Consistency.
-
-3. Testing.
-
-All of these are automatically checked and/or updated through a two-step process:
-
-1. **Pre-commit tests (using pre-commit hooks):** These tests and fixes happen every time you commit files. These quick tests ensure documentation and consistency. They should be fixed locally before pushing the code and serve as a guide for producing consistent code that follows good practices.
-
-2. **GitHub Continuous Integration (CI) tests:** These tests ensure documentation, consistency, and testing, and are required before merging any Pull Request. They can also be run manually before pushing, using `pytest`.
-
-# Your Feedback 🗣️
-
-This template aims to facilitate the life of ESP projects. If you end up struggling due to something, or if you think that something should be changed or improved, **please open an issue!** This template is meant to evolve.
-
-# How to Use This Template?
-
-There are two main use cases:
-
-1. Starting a new project from scratch.
-
-2. Adapting an existing project.
-
-## Starting a New Project from Scratch
-
-**Files that require editing contain TODO (OSS) hints that you can search for.**
-
-1. **Create from a template:** On the top right of this repository's webpage, click on *Use this template*. Then, select *Create a new repository* and proceed as you normally would. This will create a new repository as a full copy of this one. You should see Continuous Integration start as an orange dot near the last merge in the branch (in the file explorer table header row).
-
-2. **Customize your project information:** Open and edit the `pyproject.toml` file. You'll find fields under `[project]`, `[dependency-groups]`, `[project.urls]`, and `[tool.hatch.build.targets.wheel]` that need to be edited with the correct values. This includes project names, dependencies, descriptions, and links. Feel free to remove any descriptors that don't apply. The `packages` field under `[tool.hatch.build.targets.wheel]` should point to the directory containing your library (or libraries). If you don't need to build your code as a package, you can remove all the building information (leaving it by default won't hurt!).
-
-3. **Explore the structure:** Open `my_dummy_library` and look through the files to see how your code should be structured. Do the same with the `tests` folder.
-
-4. **Verify GitHub CI:** Check that the GitHub Continuous Integration is working. The orange dot from step one should now be a green checkmark, meaning the tests have passed. If it's a red cross, click on it for error details. If this happens, please create an issue in this repository, as it shouldn't occur.
-
-5. **Set up your Python environment:** Install the package and required dependencies. You can use your preferred tool, but we recommend `uv`. Make sure to also install the `requirements-dev` packages. **`Important: Never manually update the requirements files.  Only update the pyproject.toml file, because the pre-commit hook automatically generates them!`**
-
-6. **Install pre-commit:** `pre-commit` will check that you're following the rules (described below) for the files you stage with `git add` before committing. First, run `pre-commit install`. After that, every commit will trigger the consistency tests.
-
-7. **Run the tests:** To see how the tests work, run both the docstring tests and the integration/unit tests. Run the unit tests with `pytest tests --base_folder my_dummy_library` and the docstring tests with `pytest --doctest-modules my_dummy_library`. The docstring test command might create a `.pytest_cache` folder, which you may need to delete before running `pytest tests` (if you ran the docstring tests first). Everything should pass.
-
-8. **Prepare for your project:** You can now delete the `my_dummy_library` folder and replace it with your `your_library` folder.  Remember to update `.github/workflows/pythonapp.yaml` at the line `pytest --doctest-modules my_dummy_library` with your new library name.  You can also delete the example test files `test_VanillaNN.py` in `tests/integration` and `test_linear.py` in `tests/unittests` and replace them with your own test files.  (You can also keep the example files for reference and add your library.)  You can also delete or replace the `README.md` file.
-
-9. **Add, commit, and push!** GitHub CI might complain if there are no tests, but this will change once you add your test files.
-
-## Adapting an Existing Project
-
-This assumes that you haven't set up GitHub continuous integration workflows before. If you have, you'll need to merge your existing workflows with these ones. This process depends heavily on the project, and you might need help from the engineering team. If these simplified steps aren't clear enough for your project, please contact the engineering team.
-
-1. Clone this repository.
-
-2. Create a new branch in your repository.
-
-3. **Migrate to `pyproject.toml:`** If you don't have a `pyproject.toml` file, copy the one from this repository into yours. If you do have one, make sure that **all** the fields from this `pyproject.toml` are copied into yours.  Make sure the fields under `[project]`, `[dependency-groups]`, `[project.urls]`, and `[tool.hatch.build.targets.wheel]` are filled with values that reflect your project.
-
-4. **Copy files and folders:** Copy `.github/workflows`, `.dict-allowed.txt`, `conftest.py`, `tests`, and `.pre-commit-config.yaml` to the root of your GitHub repository.
-
-5. **Set up the tests:** First, initialize pre-commit (after updating your environment with the new `pyproject.toml` and the development tools): `pre-commit install`.  Then, update `.github/workflows/pythonapp.yaml` with your library's name, replacing  `my_dummy_library` at the line `pytest --doctest-modules my_dummy_library`.  Replace the example test files `test_VanillaNN.py` in `tests/integration` and `test_linear.py` in `tests/unittests` with your own test files.  Your test files should be named `test_*` or `check_*`.
-
-6. **Push the copied files:** Use `git add` and `push` to upload the copied files. This will trigger the GitHub CI, but it will likely fail initially because your code isn't properly formatted yet.
-
-7. **Refactor your code:** This is a long process. We recommend fixing your files one by one, following the rules. To see the specific errors, make a change in one of your library files, use `git add`, and try to commit. Pre-commit will show you a list of changes to make.  Look at the example files in `my_dummy_library` to see the correct formatting. After making the changes, add the file again, commit, and move on to the next one.
-
-8. **Open a Pull Request:** Once you've made the changes, open a Pull Request and check for any CI errors (at the bottom of the PR).  You can test the CI tests locally by running  `pytest tests` and `pytest --doctest-modules my_dummy_library`. If these tests pass locally and pre-commit isn't complaining, then the GitHub CI should also pass.
-
-# Explanation of The Tools
-
-This template uses two tools: [ruff](https://github.com/astral-sh/ruff) for code homogeneity and small bugs catching and [pytest](https://docs.pytest.org/en/stable/) for docstring, unitary and integration testing. This section will give a few details about docstrings, ruff linting and unitary/integration tests.
-
-## Documentation of Code Functionality: Docstrings and Doctest
-
-A **docstring** serves as an essential component of code documentation, providing explanatory text that details the purpose and usage of functions, modules, classes, and methods.  Adhering to a standardized format enhances readability and facilitates the use of automated documentation tools. In principel, we want every class and function to have a docstring. These, of course, can be rather short for simple functions. If you really wish to have a few functions without any docstring, the only solution is to put them in a separate file and modify the `.github/workflows/pythonapp.yaml` line corresponding from `pytest tests/consistency/test_docstrings.py --base_folder my_dummy_library` to `pytest tests/consistency/test_docstrings.py --base_folder my_dummy_library --skip_files_list file_to_skip.py` with `file_to_skip.py` being the name of your file.
-
-One widely adopted convention for structuring docstrings is the **NumPy style**. This format promotes clarity and consistency through the use of specific sections.
-
-Consider the following function with a NumPy-style docstring:
-
-```python
-def add_two_numbers(number1 : float, number2 : float):
-  """Computes the sum of two numerical inputs.
-
-  Parameters
-  ----------
-  number1 : int
-      The first addend.
-  number2 : int
-      The second addend.
-
-  Returns
-  -------
-  int
-      The arithmetic sum of the two input numbers.
-
-  Examples
-  --------
-  >>> add_two_numbers(5, 3)
-  8
-  >>> add_two_numbers(-1, 10)
-  9
-  """
-  return number1 + number2
-  ```
-
-Doctest is an integrated Python module that enables the execution of examples embedded within docstrings as automated tests. This functionality ensures the accuracy of the examples and verifies that the code behaves as anticipated.
-
-In the above example, the piece of code run and tested by doctest is below the
-`Examples` tag. If the results are different from 8 or 9, an error will be generated. Importantly, this also give a clear example of how to use your code.
-
-You can run doctest on your files outside of the GitHub CI if you want:
-
-```Bash
-python -m doctest my_module.py
-```
-If all doctests pass successfully, no output will be displayed. This signifies successful verification. If a doctest fails, an error message will be presented, indicating the specific example that failed and the discrepancy between the expected and actual output.
-
-## Homogeneous and Correct Code with Ruff
-
-[Ruff](https://github.com/astral-sh/ruff) functions as an automated code analysis tool, akin to a sophisticated proofreader and style advisor for your Python projects. It systematically examines your codebase, verifying compliance with a multitude of predefined rules to ensure adherence to established conventions and to identify potential sources of errors.
-
-## Scope of Rules Under Consideration
-
-We have pre-selected an ensemble of rules, but this may change in the future. These categories encompass a range of aspects related to code style, potential errors, and documentation standards:
-
-* **E4:** Pertains to the appropriate use of blank lines to enhance code readability.
-* **E7:** Addresses the consistent application of spacing around operators (e.g., +, -, =).
-* **E9:** Identifies issues related to the presence or absence of a newline character at the end of a file.
-* **F:** Flags common programming errors and constructs that may lead to unexpected behavior.
-* **DOC:** Verifies the presence and quality of docstrings, which serve as explanatory documentation for code elements.
-* **B9:** Detects potential bugs, particularly those arising from misunderstandings of how certain code constructs function.
-* **B:** An additional set of rules focused on preventing the introduction of bugs.
-* **E:** A general category encompassing style recommendations from the Pycodestyle tool.
-* **W:** Highlights potential issues that, while not immediate errors, could lead to problems in the future.
-* **ANN:** Encourages the use of type hints to improve code clarity regarding the expected data types of variables and function arguments.
-
-Some of these rules will be blocking, as in you will need to make the changes yourself and re-commit the file, while others will be automatically fixed by ruff. In the latter case, you would still need to re-commit the impacted file.
-
-# Pytest: Unit and Integration Testing
-
-Testing ensures code correctness and reliability.
-
-- **Unit Testing:** Verifies individual components (functions, methods) in isolation.
-- **Integration Testing:** Validates the interaction between different components, like legos.
-
-Pytest simplifies test creation and execution in Python.
-
-## Writing Tests
-
-1. **Test Files:** Create files named test_*.py.
-2. **Test Functions:** Define functions named test_*().
-3. **Assertions:** Use assert to verify expected outcomes.
-
-Let's start with a simple suit of functions:
-
-```python
-# check_higher.py
-
-def add(x : float, y : float):
-  """Adds two numbers together."""
-  return x + y
-
-def check_if_higher(value : float):
-  """Checks if a grade is passing (60 or above)."""
-  return value >= 60
-
-def format_answer(name : str, value : float):
-  """Creates a feedback message based on the value."""
-  if check_if_higher(value):
-    return f"The {name} is higher than 60 {value}."
-  else:
-    return f"The {name} is lower than 60 {value}."
+# cluster
+sbatch scripts/slurm/pretrain.sh
 ```
 
-Unit tests are all about checking if individual parts (like our add function or check_if_higher function) work correctly on their own. We could create a `test_check_higher.py` file in `tests/unittests`:
+Available pretraining experiments (`configs/experiment/pretrain/`):
 
-```python
-# test_check_higher.py
-import pytest
-from check_higher import add, check_if_higher
+| Experiment | Mix |
+|---|---|
+| `pretrain_xc` | XC only |
+| `pretrain_xc_pam_new` | XC + NASA BioScape/S2L fixed 5 s event slices, `w=[384,43,85]` |
+| `pretrain_xc_nasa_regions` | same granules stored as 10–60 s regions, fresh random 5 s crop per access |
+| `pretrain_xc_nasa_regions_balanced` | as above, rebalanced weights |
+| `pretrain_xc_pam_audioset` | XC + AudioSet (never run) |
 
-def test_add_positive_numbers():
-  """Tests adding two positive numbers."""
-  assert add(5, 3) == 8
+`data.weights` are **`MixedStreamingDataset` sampling weights, not dataset
+sizes** — `[384,43,85]` is 75 % XC. Always verify the *logged* weights against the
+config; a past run silently trained on a uniform mix.
 
-def test_add_negative_numbers():
-  """Tests adding two negative numbers."""
-  assert add(-2, -4) == -6
+Two `configs/trainer/pretrain.yaml` keys to check before every launch:
+`resume_from_checkpoint` is **hardcoded to the last run's checkpoint** (set it to
+`null` for a cold run), and `warm_restart` decides whether the cosine schedule is
+restarted over the remaining steps or continued. Warm vs cold matters: ~60 % of
+the apparent 400k→1M gain is already present at equal step count, i.e. partly a
+warm-restart difference rather than extra steps. `eval_every_n_steps` runs the
+in-loop representation eval (`training/repr_eval.py`, POW linear/GAP probe) to W&B.
 
-def test_add_positive_and_negative():
-  """Tests adding a positive and a negative number."""
-  assert add(10, -5) == 5
+## Evaluation
 
-def test_check_if_passed_passing_grade():
-  """Tests if higher is correctly identified."""
-  assert check_if_higher(75) is True
+Two entry points, both Hydra multirun + submitit:
 
-def test_check_if_passed_failing_grade():
-  """Tests if lower is correctly identified."""
-  assert check_if_higher(50) is False
+```bash
+# BirdSet, layerwise probe, one job per dataset × checkpoint
+uv run python scripts/birdset_eval.py --multirun \
+  experiment=sweeps/layerwise/birdset/vit hydra/launcher=gpu_h100
 
-def test_check_if_passed_borderline_grade():
-  """Tests if the borderline passing value is correctly identified."""
-  assert check_if_higher(60) is True
+# BEANS
+uv run python scripts/beans_eval.py --multirun \
+  experiment=sweeps/proto/beans/vit hydra/launcher=gpu_h100
 ```
 
-This can be tested with `pytest test_check_higher.py`.
+The sweep grid (datasets, checkpoints, seeds) is the `hydra.sweeper.params`
+block *inside* the experiment config — edit it there, not on the command line.
+`scripts/slurm/sweeps/<head>/<benchmark>/<backbone>_<partition>.sh` wraps each
+combination as a small job-manager sbatch that fans the per-dataset GPU jobs out.
 
-Integration tests operate at a higher level. They typically are the example script that you would put on your repository. For instance, let's say that you have a library that helps to train a model for bird song detection. A good integration test would be a minimal example loading mockup data, instantiating the model, training for a few epochs and checking that the loss is actually decreasing. This ensures that when all the blocks of your library are connected together, they behave as expected.
+Four heads, all 1250 steps with the same transforms/LR recipe. Resolve which head
+a run used from (`module.model._target_`, `module.freeze_backbone`) — the target
+alone confuses finetuning with final-layer probing:
 
-## :warning: :warning: How to skip doctest and pre-commit tests on a folder
+| Head | Config | Encoder | Readout |
+|---|---|---|---|
+| final-layer (FL) | `sweeps/proto/birdset/vit.yaml` | frozen | cosine-prototype on last block |
+| layerwise (LW) | `sweeps/layerwise/birdset/vit.yaml` | frozen | same head on learned softmax sum of all 12 blocks |
+| linear | `sweeps/linear/birdset/vit.yaml` | frozen | `nn.Linear` on CLS |
+| finetune | `sweeps/finetune/birdset/vit.yaml` | trainable | FL head, encoder unfrozen |
 
-We strongly advise against leaving a folder or files out of the linting and doctests. New ESP code bases should adhere to the standards detailed in this repository. If you were to release some code under the ESP organisation while leaving some parts of the code unchecked, we would most likely need to chat with you to verify that there isn't any other possible solution. If you still want to proceed, you must simply exclude the folder to skip into your `pyproject.toml`:
+Observed head ordering: **linear ≪ layerwise ≈ FL ≲ finetune**. Linear probing
+cannot rank these backbones (0.13 vs 0.46 cmAP on identical frozen weights).
+
+External baselines load **bit-exactly into our own `ViTEncoder`** — no wrapper, no
+`timm`/`transformers` at runtime. Convert once, then probe with the normal configs:
+
+```bash
+uv run python scripts/convert_external_ckpt.py audiomae   # or birdmae
+```
+
+See [`docs/external_baselines.md`](docs/external_baselines.md).
+
+## Data sources
+
+`src/soundscape_ssl/data/datasets/`, wired up via `configs/data/datasets/`:
+
+| Module | Corpus | Notes |
+|---|---|---|
+| `xeno_canto.py` | Xeno-Canto | `XenoCantoRaw` (bytes, used for pretraining) / `XenoCantoLazy` |
+| `nasa_earthaccess.py` | NASA BioSCape + Soundscapes-to-Landscapes | core PAM corpus, many splits (below) |
+| `a2o_site.py` | Australian Acoustic Observatory | optional arm; license usage uncertain |
+| `arbimon.py` | Arbimon | **dropped** — license forbids scraping at scale |
+| `soundscape_pretrain.py` | HF `soundscape-pretrain` | a2o/arbimon have *different schemas*; load each via its own parquet glob |
+| `beans.py`, `audioset.py`, `inaturalist.py` | downstream / aux | |
+| `noaa.py`, `noaa_bucket.py`, `sanctsound.py`, `pifsc.py` | marine PAM | |
+
+NASA splits (`NASAEarthAccess(split=...)`), all sharing one loader:
+
+- `BIOSCAPE` / `S2L` — full granules, streamed from the ORNL DAAC over HTTP range reads.
+- `*_EVENTS` — one row per ≥0.7 AudioProtoPNet detection, fetched over the network.
+- `*_EVENTS_LOCAL`, `*_RANDOM`, `*_PEAK`, `*_REGIONS` — materialized locally as flat
+  `.bin` + parquet index and read via `np.memmap`. The three selection arms
+  (random / energy-peak / model-confidence) differ **only** in the offset-selection
+  rule and share the format and the loader.
+
+Materialization / curation scripts:
+
+| Script | Purpose |
+|---|---|
+| `curate_nasa.py` | model-confidence arm — AudioProtoPNet-20-BirdSet-XCL scores 5 s windows |
+| `curate_nasa_peak.py` | energy-peak arm (mel-wavelet activity detector) |
+| `curate_nasa_random.py` | random arm — the matched-N no-curation baseline |
+| `curate_soundscape.py` | same curator over A2O / Arbimon → detections parquet |
+| `materialize_nasa_events.py` | download + decode the 5 s event slices to local shards |
+| `materialize_nasa_regions.py` | store contiguous 10–60 s regions instead (fresh crop per access) |
+| `convert_nasa_shards.py` | parquet-audio shards → flat `.bin` + memmap index (fixes worker OOM) |
+
+`curate_soundscape.py`'s curator needs `transformers` 4.x — run it with a
+`uv run --with` override, not the project env.
+
+## Configuration
+
+Hydra, root configs `configs/pretrain.yaml` and `configs/train.yaml`:
 
 ```
-[tool.ruff]
-exclude = ["my_folder"]
+data/
+  pretrain.yaml | train.yaml       datasets + transforms + loaders + cache
+  datasets/pretrain/*              one file per pretraining corpus/split
+  datasets/train/{birdset,beans}/  one file per downstream task
+  transforms/                      pretrain, audiomae, birdmae, bat, pupujepa, ...
+  loaders/                         default, pretrain, a100 (batch size / workers)
+module/
+  mae.yaml | vit.yaml              optimizer + scheduler + loss + metrics
+  model/{mae,proto,layerwise,linear,backbone}/
+experiment/
+  pretrain/*                       the pretraining mixes
+  sweeps/<head>/<benchmark>/<backbone>.yaml   eval sweeps incl. their sweeper grid
+trainer/{pretrain,train}.yaml
+hydra/launcher/{gpu,gpu_h100}.yaml submitit
 ```
 
-and then remove it from the call to doctest `pytest tests/consistency --base_folder my_dummy_library # make sure that your folder is not into base_folder` in `.github/workflows/pythonapp.yaml`. If your folder is at the same level than other folders to test, you can just make multiple calls to `pytest tests/consistency --base_folder1`, `pytest tests/consistency --base_folder2`.
+Anything is overridable on the CLI, e.g.
+`uv run python scripts/pretrain.py module.model.encoder_depth=6 trainer.max_steps=1000`.
+
+## Operational notes / known pitfalls
+
+Hard-won, all of these have cost a run at least once:
+
+- **Dataloaders must use `spawn`** — `fork` is unsafe with the XC dataset. Spawn
+  copies ~900k records per worker, so RAM scales with `num_workers` (OOM at
+  20 workers / 34 GB). Use `scripts/worker_sweep.py` to find the knee.
+- **NASA parquet OOM** — `pq.read_table(memory_map=True)` does *not* share pages;
+  every worker copies the whole audio column. Fixed by the flat `.bin` + memmap
+  layout (`convert_nasa_shards.py`).
+- **Representation / kNN eval must run in fp32** — bf16 autocast collapses the
+  anisotropic MAE kNN to chance.
+- **Resolve backbones by full checkpoint path, not basename** —
+  `step_0400000.ckpt` collides across three encoders.
+- Resample with `soxr_hq`, not `kaiser_best` (330 ms/clip → the NOAA slowness).
+- VBR-MP3 duration overestimates produce empty crops → `PeakNormalize` crash.
+- GCS reads are forced anonymous via `data/datasets/_gcs_anon.py` (public buckets;
+  fixes expiring-ADC auth on long runs).
+- Probing label maps: a train/test label index shift from missing XC species
+  manifests as random NES/PER/UHH scores.
+
+## Development
+
+```bash
+uv run pytest tests/unittests
+uv run pytest tests/consistency --base_folder soundscape_ssl
+uv run pytest --doctest-modules soundscape_ssl
+uv run ruff check . && uv run ruff format --check .
+```
+
+`pre-commit install` once; CI (`.github/workflows/ci.yml`) runs the same checks
+plus `deptry`. `tests/`, `scripts/` and `docs/hooks` are excluded from ruff. The
+example template tests (`tests/integration/test_VanilaNN.py`,
+`tests/unittests/test_linear.py`) are still the inherited placeholders — the
+library itself has no unit tests yet.
+
+Agent conventions (issue tracker under `.scratch/`, triage labels, domain docs)
+are documented in `docs/agents/` and referenced from `CLAUDE.md`.
