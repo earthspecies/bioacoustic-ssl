@@ -188,12 +188,10 @@ Materialization / curation scripts:
 | `curate_nasa.py` | model-confidence arm — AudioProtoPNet-20-BirdSet-XCL scores 5 s windows |
 | `curate_nasa_peak.py` | energy-peak arm (mel-wavelet activity detector) |
 | `curate_nasa_random.py` | random arm — the matched-N no-curation baseline |
-| `curate_soundscape.py` | same curator over A2O / Arbimon → detections parquet |
 | `materialize_nasa_events.py` | download + decode the 5 s event slices to local shards |
 | `materialize_nasa_regions.py` | store contiguous 10–60 s regions instead (fresh crop per access) |
-| `convert_nasa_shards.py` | parquet-audio shards → flat `.bin` + memmap index (fixes worker OOM) |
 
-`curate_soundscape.py`'s curator needs `transformers` 4.x — run it with a
+`curate_nasa.py`'s curator needs `transformers` 4.x — run it with a
 `uv run --with` override, not the project env.
 
 ## Configuration
@@ -226,10 +224,10 @@ Hard-won, all of these have cost a run at least once:
 
 - **Dataloaders must use `spawn`** — `fork` is unsafe with the XC dataset. Spawn
   copies ~900k records per worker, so RAM scales with `num_workers` (OOM at
-  20 workers / 34 GB). Use `scripts/worker_sweep.py` to find the knee.
+  20 workers / 34 GB).
 - **NASA parquet OOM** — `pq.read_table(memory_map=True)` does *not* share pages;
   every worker copies the whole audio column. Fixed by the flat `.bin` + memmap
-  layout (`convert_nasa_shards.py`).
+  layout the materialization scripts write.
 - **Representation / kNN eval must run in fp32** — bf16 autocast collapses the
   anisotropic MAE kNN to chance.
 - **Resolve backbones by full checkpoint path, not basename** —
