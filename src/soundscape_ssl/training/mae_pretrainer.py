@@ -14,7 +14,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from soundscape_ssl.data import CachedDataset, Compose, MixedStreamingDataset, open_run_cache
+from soundscape_ssl.data import Compose, MixedStreamingDataset
 from soundscape_ssl.data.transforms.spectrogram import BatchSpectrogram
 from soundscape_ssl.models.architectures.mae import MAE
 from soundscape_ssl.models.utils.lr_decay import param_groups_lrd
@@ -39,15 +39,6 @@ def pretrain(fabric: Fabric, cfg: DictConfig) -> None:
         torch.set_float32_matmul_precision("high")   # or "medium"
 
     datasets = [instantiate(config) for config in list(cfg.data.datasets.values())]
-
-    cache_cfg = cfg.data.get("cache", None)
-    if cache_cfg is not None and cache_cfg.get("enabled", False):
-        cache = open_run_cache(cache_cfg.get("dir"), cache_cfg.get("size_limit_gb", 50))
-        # Namespace by the dataset config key so each mix member has its own idx space.
-        datasets = [
-            CachedDataset(ds, cache, name)
-            for name, ds in zip(cfg.data.datasets.keys(), datasets, strict=True)
-        ]
 
     dataset = MixedStreamingDataset(
         datasets=datasets,

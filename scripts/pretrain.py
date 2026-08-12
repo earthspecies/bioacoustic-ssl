@@ -25,7 +25,6 @@ import torch
 from lightning.fabric import Fabric
 from omegaconf import DictConfig, OmegaConf
 
-from soundscape_ssl.data import cleanup_all
 from soundscape_ssl.training.mae_pretrainer import pretrain
 
 
@@ -40,10 +39,7 @@ def main(cfg: DictConfig) -> None:
         strategy=cfg.trainer.strategy,
         precision=cfg.trainer.precision,
     )
-    try:
-        fabric.launch(pretrain, cfg)
-    finally:
-        cleanup_all()
+    fabric.launch(pretrain, cfg)
 
 
 if __name__ == "__main__":

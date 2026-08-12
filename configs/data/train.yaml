@@ -14,8 +14,3 @@ class_weighting:
   seed: ${seed}
 
 num_classes: null
-
-cache:
-  enabled: false
-  dir: null            # null -> ~/.cache/soundscape_ssl ; override e.g. $SLURM_TMPDIR, /scratch/...
-  size_limit_gb: 100

@@ -28,6 +28,3 @@ defaults:
 
 data:
   weights: [256, 85, 171]  # [xc_raw, nasa_bioscape_regions, nasa_s2l_regions]; sums to batch_size
-
-  cache:
-    enabled: false

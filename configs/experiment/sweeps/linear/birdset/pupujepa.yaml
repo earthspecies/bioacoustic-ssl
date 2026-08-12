@@ -63,4 +63,5 @@ hydra:
       # defaults list merges the `trainer` group after `experiment`, so only a
       # sweeper/CLI override outranks trainer/train.yaml's default path.
       trainer.resume_from_checkpoint: 'null'
-      data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      #data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      data/datasets: train/birdset/sne, train/birdset/ssw, train/birdset/uhh

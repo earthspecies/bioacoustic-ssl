@@ -27,7 +27,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 
-from soundscape_ssl.data import CachedDataset, Compose, cleanup_all, compute_sample_weights, open_run_cache
+from soundscape_ssl.data import Compose, compute_sample_weights
 from soundscape_ssl.models import ViTClassifier, ViTProtoFloat
 from soundscape_ssl.models.utils.lr_decay import param_groups_lrd
 from soundscape_ssl.training.lr_scheduler import CosineWarmupScheduler
@@ -48,8 +48,6 @@ def hydra_main(cfg: DictConfig) -> None:
     except Exception:
         traceback.print_exc()
         raise
-    finally:
-        cleanup_all()
 
 
 def main(fabric: Fabric, cfg: DictConfig) -> None:
@@ -61,12 +59,6 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
     train_dataset, train_meta = dataset_from_config(instantiate(cfg.data.datasets["train"]))
     test_dataset, test_meta = dataset_from_config(instantiate(cfg.data.datasets["test"]))
     cfg.data.num_classes = test_meta["mulitlabel_from_feature"]["num_classes"] if "mulitlabel_from_feature" in test_meta else test_meta["label_from_feature"]["num_classes"]
-
-    cache_cfg = cfg.data.get("cache", None)
-    if cache_cfg is not None and cache_cfg.get("enabled", False):
-        cache = open_run_cache(cache_cfg.get("dir"), cache_cfg.get("size_limit_gb", 50))
-        train_dataset = CachedDataset(train_dataset, cache, "train")
-        test_dataset = CachedDataset(test_dataset, cache, "test")
 
     # warmup loaders
     if fabric.is_global_zero:

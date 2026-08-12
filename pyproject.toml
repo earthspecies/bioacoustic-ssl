@@ -8,7 +8,6 @@ requires-python = ">=3.12,<3.14"
 
 dependencies = [
   "datasets",
-  "diskcache>=5.6.0",
   "earthaccess>=0.18",
   "rfcx",
   "alp-data>=1.11.0",
@@ -29,7 +28,6 @@ dependencies = [
   "tqdm>=4.0.0",
   "transformers>=5.6.1",
   "wandb>=0.26.1",
-  "avex>=1.2.0",
   "ipykernel>=7.3.0",
 ]
 

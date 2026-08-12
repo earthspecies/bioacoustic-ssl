@@ -6,11 +6,3 @@ defaults:
 
 
 weights: null
-
-# On-the-fly per-item cache. Off by default for pretraining: it only helps when
-# the dataset fits within size_limit_gb (else LRU eviction thrashes with a low
-# hit rate). Enable for small/curated soundscape mixes and size dir/limit to fit.
-cache:
-  enabled: false
-  dir: null            # null -> ~/.cache/soundscape_ssl ; override e.g. $SLURM_TMPDIR, /scratch/...
-  size_limit_gb: 100

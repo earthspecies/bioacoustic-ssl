@@ -1,9 +1,0 @@
-# @package _global_
-# Sweep all 7 BEANS classification tasks for one checkpoint. Pass the checkpoint
-# on the CLI, e.g.:
-#   uv run python scripts/beans_avex_eval.py --multirun \
-#     experiment=sweeps/beans_avex checkpoint=checkpoints/XC.ckpt
-hydra:
-  sweeper:
-    params:
-      data/datasets: train/beans/bats, train/beans/cbi, train/beans/dogs, train/beans/esc50, train/beans/humbugdb, train/beans/sc, train/beans/watkins

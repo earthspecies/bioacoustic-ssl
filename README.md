@@ -46,7 +46,6 @@ src/soundscape_ssl/     library (installed package)
     datasets/           one module per corpus (see table below)
     transforms/         audio + batched-spectrogram transform pipeline
     iterable_dataset.py MixedStreamingDataset — weighted infinite mix of map-style datasets
-    cache.py            optional per-item diskcache
   models/
     architectures/      mae, vit (encoder/decoder/classifier/proto heads), bat, pupujepa
     components/         attention, block, mlp, patch_embed, pos_embed
@@ -203,7 +202,7 @@ Hydra, root configs `configs/pretrain.yaml` and `configs/train.yaml`:
 
 ```
 data/
-  pretrain.yaml | train.yaml       datasets + transforms + loaders + cache
+  pretrain.yaml | train.yaml       datasets + transforms + loaders
   datasets/pretrain/*              one file per pretraining corpus/split
   datasets/train/{birdset,beans}/  one file per downstream task
   transforms/                      pretrain, audiomae, birdmae, bat, pupujepa, ...
