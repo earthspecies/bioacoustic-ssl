@@ -1,0 +1,22 @@
+# @package _global_
+
+# `XC + NASA (400k)`'s share of the label-space re-probe, final-layer head (see
+# sweeps/layerwise/birdset/vit_relabel.yaml for why).
+#
+# It is the only LIVE arm with a final-layer probe — the other final-layer row on
+# our own weights is the retired warm restart, which is excluded from published
+# comparisons. So this is the whole of the final-layer re-probe on our arms; the
+# missing final-layer probes for the other five arms are a separate, much larger
+# gap (see .scratch/publish-readiness/issues/01-missing-probes.md).
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /module/model: proto/vit
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt

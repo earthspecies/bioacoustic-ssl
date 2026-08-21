@@ -1,0 +1,23 @@
+# @package _global_
+
+# The seed-2 half of the label-space re-probe (see vit_relabel.yaml).
+#
+# `XC (1M)` and `XC + NASA (1M)` are the only backbones with two probe seeds, and
+# that pair is what the reported noise floor (<=0.001 cmAP on the test mean) is
+# measured from. Both seeds must sit on the same label space or the noise floor
+# is measured across the 2026-08-20 repair on NES / PER / SNE instead of across
+# a head re-seed.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /module/model: layerwise/vit
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-layerwise
+
+hydra:
+  sweeper:
+    params:
+      seed: 2
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt

@@ -1,0 +1,29 @@
+# @package _global_
+
+# Finetune head's share of the label-space re-probe (see
+# sweeps/layerwise/birdset/vit_relabel.yaml). Protocol identical to
+# sweeps/finetune/birdset/vit — `module.freeze_backbone: false` and nothing else
+# retuned; only the task list is pinned.
+#
+# The layerwise-finetune sweep already ran after the 2026-08-20 repair, so
+# finishing this batch puts the two finetuning heads on the same label space and
+# makes the probing-vs-finetuning contrast a single-factor one again.
+#
+# H100 only — ViT-B backward at batch_size 256 does not fit an A100-40.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /module/model: proto/vit
+
+module:
+  freeze_backbone: false
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-finetune
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt

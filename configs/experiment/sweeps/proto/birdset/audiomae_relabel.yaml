@@ -1,0 +1,19 @@
+# @package _global_
+
+# AudioMAE's share of the final-layer label-space re-probe (see
+# sweeps/layerwise/birdset/vit_relabel.yaml). Same protocol and preprocessing as
+# sweeps/proto/birdset/audiomae, task list pinned to the three tasks the
+# 2026-08-20 repair changed.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: audiomae
+  - override /module/model: proto/audiomae
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/audiomae.ckpt

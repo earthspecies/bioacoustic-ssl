@@ -1,0 +1,22 @@
+# @package _global_
+
+# AudioMAE's share of the label-space re-probe (see
+# sweeps/layerwise/birdset/vit_relabel.yaml). Same protocol and preprocessing as
+# sweeps/layerwise/birdset/audiomae; only the task list is pinned to the three
+# tasks the 2026-08-20 repair changed, so the external reference row ends up on
+# the same label space as our arms.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: audiomae
+  - override /module/model: layerwise/audiomae
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-layerwise
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/audiomae.ckpt

@@ -1,0 +1,32 @@
+# @package _global_
+
+# Re-probe NES / PER / SNE layerwise on the backbones whose only layerwise runs
+# predate the 2026-08-20 BirdSet label-space repair.
+#
+# The repair restored three species that BirdSet's own GBIF linkage had dropped
+# (`runwre1` in NES, `scbwoo5` in PER, `pasfly` in SNE), taking those tasks from
+# 88/131/55 to 89/132/56 classes. cmAP is a macro mean over classes, so a
+# pre-repair run and a post-repair run on the same task average over DIFFERENT
+# class sets and their numbers are not strictly comparable. `XC (400k)` and the
+# two region-store arms were probed after the repair; `XC (1M)`, `XC + NASA
+# (400k)` and `XC + NASA (1M)` were not — which puts 3 of the 7 test tasks in the
+# headline table on mixed label spaces, including the schedule contrast that is
+# the one effect clearing the noise floor.
+#
+# Protocol is unchanged from sweeps/layerwise/birdset/vit — this config differs
+# only in which (backbone, task) cells it fills. Seed 2 for the two 1M backbones
+# is in vit_relabel_seed2.yaml.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /module/model: layerwise/vit
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-layerwise
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt

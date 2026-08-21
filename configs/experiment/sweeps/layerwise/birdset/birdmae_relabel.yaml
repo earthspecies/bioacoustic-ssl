@@ -1,0 +1,23 @@
+# @package _global_
+
+# Bird-MAE-Base's share of the label-space re-probe (see
+# sweeps/layerwise/birdset/vit_relabel.yaml). Same protocol and preprocessing as
+# sweeps/layerwise/birdset/birdmae; only the task list is pinned to the three
+# tasks the 2026-08-20 repair changed. This row carries the headline claim (an
+# XC-only backbone at or above a matched Bird-MAE-Base probe), so it must be on
+# the repaired label space.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: birdmae
+  - override /module/model: layerwise/birdmae
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-layerwise
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/birdmae_base.ckpt

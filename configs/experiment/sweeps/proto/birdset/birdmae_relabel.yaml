@@ -1,0 +1,21 @@
+# @package _global_
+
+# Bird-MAE-Base's share of the final-layer label-space re-probe (see
+# sweeps/layerwise/birdset/vit_relabel.yaml). Same protocol and preprocessing as
+# sweeps/proto/birdset/birdmae, task list pinned to the three tasks the
+# 2026-08-20 repair changed. This is the row that the published Bird-MAE
+# prototypical-probing numbers are read against, so it must be on the repaired
+# label space.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: default
+  - override /data/transforms: birdmae
+  - override /module/model: proto/birdmae
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/birdmae_base.ckpt

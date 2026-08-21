@@ -1,0 +1,30 @@
+# @package _global_
+
+# Linear head's share of the label-space re-probe (see
+# sweeps/layerwise/birdset/vit_relabel.yaml). Protocol identical to
+# sweeps/linear/birdset/vit, including the nulled prototype / layer-weight LRs;
+# only the task list is pinned.
+#
+# The linear row exists to make the head-ordering claim (linear << layerwise ~=
+# final-layer <~ finetune) on ONE label space; today its NES / PER / SNE cells sit
+# on the pre-repair space while the layerwise-finetune cells sit on the repaired
+# one, so the ordering is currently read across a label-space change.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /module/model: linear/vit
+
+module:
+  optimizer:
+    prototype_lr: null
+    layer_weights_lr: null
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-linear
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt

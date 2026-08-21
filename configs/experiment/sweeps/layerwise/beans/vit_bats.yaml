@@ -1,0 +1,29 @@
+# @package _global_
+
+# The three `egyptian_fruit_bats` cells missing from the BEANS layerwise grid.
+#
+# `XC (400k)` (6yhtw5dm) and `XC + NASA v2 (400k)` (iv4xrpc0) both CRASHED on
+# bats on 2026-08-19 with "Unable to load any of {libcudnn_graph.so.9...}" on
+# slurm-8x-a100-40gb-2 — a broken per-job venv on /scratch, not a data or config
+# fault, so a plain resubmit is the whole fix. `XC + NASA (400k)` was never
+# submitted for bats at all.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /data/transforms: multiclass
+  - override /module/metrics: [acc]
+  - override /module/loss: ce
+  - override /module/model: layerwise/vit
+
+data:
+  class_weighting:
+    enabled: false
+  weights: null
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/beans/bats
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_400k_cold.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k_v2.ckpt

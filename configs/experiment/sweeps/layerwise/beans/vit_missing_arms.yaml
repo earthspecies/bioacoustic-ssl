@@ -1,0 +1,28 @@
+# @package _global_
+
+# BEANS layerwise for the two live arms that have NO BEANS number at all:
+# `XC (1M)` — our best backbone, and the XC-only control the cross-domain claim
+# needs at the 1M schedule — and `XC + NASA v2 50% (400k)`, the balanced-mix arm.
+#
+# Protocol identical to sweeps/layerwise/beans/vit; only the checkpoint list
+# differs. All 6 tasks, because neither backbone has any.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /data/transforms: multiclass
+  - override /module/metrics: [acc]
+  - override /module/loss: ce
+  - override /module/model: layerwise/vit
+
+data:
+  class_weighting:
+    enabled: false
+  weights: null
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/beans/bats, train/beans/cbi, train/beans/dogs, train/beans/esc50, train/beans/humbugdb, train/beans/watkins
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_50_400k.ckpt
