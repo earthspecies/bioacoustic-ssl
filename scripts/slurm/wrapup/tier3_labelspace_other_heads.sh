@@ -10,11 +10,18 @@
 
 # TIER 3 — put the OTHER three heads on the repaired label space too.
 #
-# 21 GPU jobs, ~44 GPU-h. Tier 1 fixes the layerwise table; this fixes the
-# protocol section, whose whole point is comparing heads on identical weights.
-# Right now layerwise-finetune ran after the 2026-08-20 repair while final-layer,
-# linear and finetune ran before it, so the head ordering is read partly across a
-# label-space change on NES/PER/SNE.
+# FALLBACK BATCH — do not run this unless the GPU-hours are going spare. 21 GPU
+# jobs, ~44 GPU-h, and the gap it closes can be closed for free instead: once
+# tier 1 has landed, every layerwise cell logs test_AP_per_class, and cmAP is a
+# mean over exactly those, so dropping the restored class down-converts a
+# post-repair run onto the pre-repair space EXACTLY. That puts all four heads on
+# one label space at no compute cost.
+#
+# Run this only if the head comparison is needed on AUROC or T1 as well — those
+# are not per-class means in this logging, so they cannot be down-converted — or
+# if the head section must be quoted on BirdSet's official 89/132/56 space rather
+# than the one-class-short one. See
+# .scratch/publish-readiness/issues/01-missing-probes.md.
 #
 #   proto/vit_relabel       {+NASA ev 400k}      x 3 tasks = 3   (the only live
 #                                                                arm with an FL probe)
