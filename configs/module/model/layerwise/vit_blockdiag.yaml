@@ -1,0 +1,29 @@
+defaults:
+  - /module/model/backbone/vit@_here_
+  - _self_
+
+_target_: soundscape_ssl.models.ViTProtoLayerwise
+
+num_classes: ${data.num_classes}
+num_prototypes: 20
+head_drop: 0.0
+layer_norm: true
+
+# The ONE factor separating this from layerwise/vit. Everything else — encoder
+# geometry, prototype count, layer norms, the LR recipe — is identical, so a run
+# with this config against the matching layerwise/vit run is a clean measurement
+# of the mixer constraint alone.
+#
+# `dense` gives every class a weight on every one of the 20 * num_classes
+# prototypes: at PER's 132 classes that is 2 640 readout weights per class, of
+# which the 20 "belonging" to that class are 0.8 %. So the dense head is a shared
+# over-complete prototype pool with a free readout, and prototypes are not
+# assigned to classes at all. `block_diagonal` pins the off-block weights to
+# zero, so each class is scored by its own 20 prototypes and nothing else.
+mixer: block_diagonal
+
+# Not needed at BirdSet scale and deliberately left off: the similarity tensor is
+# (256, 20 * 132, 8, 32) = 0.35 GB in bf16 at PER, the largest of the 8 tasks.
+# Chunking is exact, but leaving it null keeps the compute path identical to the
+# dense probes so the contrast really is single-factor.
+proto_chunk: null

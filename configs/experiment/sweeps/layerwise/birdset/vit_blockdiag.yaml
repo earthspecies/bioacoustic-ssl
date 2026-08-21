@@ -1,0 +1,49 @@
+# @package _global_
+
+# Does the block-diagonal mixer cost downstream accuracy?
+#
+# The full-XC release head had to constrain the prototypical readout, because the
+# dense mixer is quadratic in num_classes (2.755 B parameters at 11 737 classes).
+# That constraint is untested: at BirdSet scale both mixers fit, so this measures
+# the one thing the release model cannot measure about itself. Identical protocol
+# to sweeps/layerwise/birdset/vit — same encoder, same 20 prototypes per class,
+# same 1250-step recipe, same seed — with `mixer: block_diagonal` as the only
+# change, against the dense runs that already exist.
+#
+# Two backbones, all 8 tasks, seed 1 = 16 runs, ~21 GPU-h:
+#
+#   XC (400k)  its dense layerwise row is complete AND on one label space today
+#              (the 2026-08-20 repair touched only NES/PER/SNE, which that
+#              backbone was probed after), so this arm is comparable immediately.
+#   XC (1M)    the backbone the release head actually sits on, and the stronger
+#              encoder. Its dense NES/PER/SNE reference is pre-repair, so a full
+#              8-task comparison on this arm needs tier 1
+#              (scripts/slurm/wrapup/tier1_labelspace_layerwise.sh) first; the
+#              other 5 tasks are unaffected by the repair and compare today.
+#
+# Drop the second checkpoint to halve the cost if only the headline answer is
+# wanted; keep both to see whether the head effect is backbone-dependent.
+#
+# READ THE RESULTS BY RUN NAME, NOT BY CONFIG. These runs use the same
+# `module.model._target_` and `freeze_backbone` as the dense layerwise probes, so
+# every existing resolver — notebooks/birdset_results_nasa.ipynb, the coverage
+# pull — would classify them as plain `layerwise` cells and, because they are
+# newer, let them SUPERSEDE the published dense numbers in its
+# most-recent-finished dedup. The `BD-` run-name prefix is what prevents that: it
+# makes `parts[1] != "test_5s"`, so both notebook parsers skip these runs
+# entirely. Pull them with a name filter, or discriminate on
+# `config.module.model.mixer`.
+
+defaults:
+  - override /data: train
+  - override /data/loaders: a100
+  - override /module/model: layerwise/vit_blockdiag
+
+run_name: BD-${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-layerwise
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_400k_cold.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt
