@@ -1,3 +1,4 @@
+from pathlib import Path
 from collections import Counter
 from typing import List, Literal, Any
 
@@ -28,6 +29,16 @@ class CastConfig(BaseModel):
     property: str
     cast_class: Any
     extract_all_regex: str = None
+
+
+class AppendLabelWhereConfig(BaseModel):
+    """Config for :class:`AppendLabelWhere`."""
+
+    type: Literal["append_label_where"]
+    property: str
+    key_property: str
+    key: str
+    value: int
 
 
 class LongTailUpsampleTargetConfig(BaseModel):
@@ -217,6 +228,94 @@ class MultiLabelFromFeature(LabelFromFeature):
         return backend.add_column(self.output_feature, mapped), metadata
 
 
+class AppendLabelWhere:
+    """Append ``value`` to the list column ``property`` where ``key`` is present.
+
+    Repairs BirdSet test splits in which the upstream GBIF linkage failed: the
+    species appears in ``ebird_code_multilabel`` but is missing from
+    ``gbifID_multispecies``, so its test positives are silently dropped and the
+    class cannot be scored at all. Affects exactly one species in each of NES
+    (``runwre1``), PER (``scbwoo5``) and SNE (``pasfly``); every other task links
+    cleanly.
+
+    Runs *after* the ``Cast`` that turns ``property`` into ``List(Int64)`` and
+    before ``MultiLabelFromFeature``. ``key`` is matched against the raw
+    ``key_property`` string as a quoted token (``"pasfly"``), so it cannot match a
+    longer code that merely contains it.
+    """
+
+    def __init__(self, property: str, key_property: str, key: str, value: int) -> None:
+        self.property = property
+        self.key_property = key_property
+        self.key = key
+        self.value = value
+
+    @classmethod
+    def from_config(cls, cfg: AppendLabelWhereConfig) -> "AppendLabelWhere":
+        return cls(**cfg.model_dump(exclude=("type",)))
+
+    def __call__(self, backend: DataBackend) -> tuple[DataBackend, dict]:
+        assert isinstance(backend, PolarsBackend)
+
+        df: pl.DataFrame = backend.unwrap
+        hit = pl.col(self.key_property).str.contains(f'"{self.key}"', literal=True)
+        patched = (
+            pl.when(hit)
+            .then(
+                pl.concat_list(
+                    pl.col(self.property).fill_null([]),
+                    pl.lit(self.value, dtype=pl.Int64),
+                ).list.unique()
+            )
+            .otherwise(pl.col(self.property))
+            .alias(self.property)
+        )
+        out = df.with_columns(patched)
+        n_patched = int(df.select(hit.fill_null(False).sum()).item())
+
+        return backend.add_column(self.property, out[self.property]), {
+            "rows_patched": n_patched,
+            "appended_value": self.value,
+        }
+
+
+def class_ids_from_parquet(
+    path: str,
+    column: str = "gbifID",
+) -> list[int]:
+    """The class universe of a frozen label space, as a list of class ids.
+
+    Used from config as a nested ``_target_`` wherever a class list is needed::
+
+        class_ids:
+          _target_: soundscape_ssl.data.class_ids_from_parquet
+          path: metadata/xc_v0.2.0_classes.parquet
+
+    Written for the full Xeno-Canto head, whose 11 737 ids would otherwise be
+    inlined in the dataset config and then copied four times into every W&B run
+    config. Pointing at the file instead keeps the label space in exactly one
+    place — the same file the model card and BirdSet logit masking read — so the
+    head's output indices cannot drift from what maps them back to species.
+
+    The order returned here does not matter: :class:`MultiLabelFromFeature`
+    builds its map as ``sorted(set(class_ids))``, so a class's index is its rank
+    in ascending id order regardless.
+
+    Parameters
+    ----------
+    path :
+        Parquet file with one row per class. Relative paths resolve against the
+        repository root, so a config value is independent of the run's cwd
+        (Hydra changes it).
+    column :
+        Column holding the class id.
+    """
+    file = Path(path)
+    if not file.is_absolute():
+        file = Path(__file__).resolve().parents[3] / path
+    return pl.read_parquet(file, columns=[column])[column].to_list()
+
+
 def compute_sample_weights(
     dataset: Any,
     label_column: str = "label",
@@ -258,3 +357,4 @@ register_transform(MultiLabelFromFeatureConfig, MultiLabelFromFeature)
 register_transform(FilterFixConfig, Filter)
 register_transform(CastConfig, Cast)
 register_transform(LongTailUpsampleTargetConfig, LongTailUpsampleTarget)
+register_transform(AppendLabelWhereConfig, AppendLabelWhere)

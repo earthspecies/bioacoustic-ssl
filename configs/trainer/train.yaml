@@ -7,6 +7,15 @@ validate_amount: 15
 grad_clip: 2.0
 log_every_n_steps: 1
 save_every_n_steps: 500000
+# Off by default: the benchmark probes have no use for a ~1 GB checkpoint each,
+# and 60 of them would fill the disk. Long runs (e.g. the full-XC classifier)
+# turn it on together with a real `save_every_n_steps`.
+save_checkpoints: false
+# A state checkpoint written by birdset_eval.py's own _save_checkpoint, to
+# continue a run that hit the 48 h submitit timeout. Restores model + optimizer
+# + scheduler + step, unlike `resume_from_checkpoint` below, which only reads
+# `encoder.*` out of a PRETRAINING checkpoint and always starts at step 0.
+resume_from_state: null
 resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt # XC # 2026-06-05/12-15-53
 #resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terrestrial.ckpt # XC + terrestrial # 2026-06-05/18-02-48
 

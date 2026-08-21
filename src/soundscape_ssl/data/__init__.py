@@ -1,6 +1,8 @@
 from .iterable_dataset import MixedStreamingDataset
 from .transforms.base import Compose, Lambda
 from .utils import (
+    AppendLabelWhere,
+    AppendLabelWhereConfig,
     Cast,
     CastConfig,
     Filter,
@@ -9,10 +11,13 @@ from .utils import (
     LongTailUpsampleTargetConfig,
     MultiLabelFromFeature,
     MultiLabelFromFeatureConfig,
+    class_ids_from_parquet,
     compute_sample_weights,
 )
 
 __all__ = [
+    "AppendLabelWhere",
+    "AppendLabelWhereConfig",
     "Compose",
     "Lambda",
     "MixedStreamingDataset",
@@ -24,5 +29,6 @@ __all__ = [
     "Cast",
     "LongTailUpsampleTarget",
     "LongTailUpsampleTargetConfig",
+    "class_ids_from_parquet",
     "compute_sample_weights",
 ]

@@ -1,0 +1,10 @@
+# @package module.metrics.map_per_class
+
+# Per-class average precision (`average: null` -> one value per label) alongside
+# the macro `map` metric. Logged as one W&B panel per class under the
+# `test_AP_per_class/` section, keyed by the class's gbifID so the series can be
+# joined against the BirdSet label space and the curated PAM species counts.
+_target_: torchmetrics.classification.MultilabelAveragePrecision
+num_labels: ${data.num_classes}
+average: null
+_stage_: ["test"]

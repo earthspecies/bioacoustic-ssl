@@ -49,7 +49,9 @@ def param_groups_lrd(
         prototype_lr: When set, all non-backbone (head-side) trainable params are
             removed from the layer-decay groups and placed in a dedicated group
             with this fixed absolute learning rate. This covers the prototype
-            head (``head.prototype_vectors``, ``head.linear.*``) as well as the
+            head (``head.prototype_vectors``, and ``head.linear.*`` or
+            ``head.class_weight`` / ``head.class_bias`` depending on the mixer)
+            as well as the
             layerwise-fusion params of :class:`ViTProtoLayerwise`
             (``layer_weights``, ``layer_norms.*``). The layer-decay / ``base_lr``
             groups are then left with genuine backbone params only. Leave as
@@ -72,6 +74,10 @@ def param_groups_lrd(
         return (
             "prototype_vectors" in name
             or "head.linear" in name
+            # block-diagonal mixer of PrototypicalFloat — the same role
+            # `head.linear` plays for the dense mixer, so the same group.
+            or "head.class_weight" in name
+            or "head.class_bias" in name
             or _is_layer_weights(name)
             or name.startswith("layer_norms")
         )

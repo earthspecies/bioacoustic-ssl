@@ -6,6 +6,7 @@ import random
 import time
 from pathlib import Path
 import traceback
+from typing import Any
 
 import hydra
 import torch
@@ -59,6 +60,12 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
     train_dataset, train_meta = dataset_from_config(instantiate(cfg.data.datasets["train"]))
     test_dataset, test_meta = dataset_from_config(instantiate(cfg.data.datasets["test"]))
     cfg.data.num_classes = test_meta["mulitlabel_from_feature"]["num_classes"] if "mulitlabel_from_feature" in test_meta else test_meta["label_from_feature"]["num_classes"]
+
+    # Class identity per label index, for per-class metric keys. The label map is
+    # {class_id: index} (gbifID for BirdSet), so invert it and order by index.
+    _label_meta = test_meta.get("mulitlabel_from_feature") or test_meta.get("label_from_feature") or {}
+    _label_map = _label_meta.get("label_map") or {}
+    class_ids = [cid for cid, _ in sorted(_label_map.items(), key=lambda kv: kv[1])]
 
     # warmup loaders
     if fabric.is_global_zero:
@@ -134,7 +141,7 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
     train_loader = fabric.setup_dataloaders(train_loader, use_distributed_sampler=False)
     test_loader = fabric.setup_dataloaders(test_loader)
 
-    global_step = _load_checkpoint(fabric, model, cfg)
+    global_step = _load_checkpoint(fabric, model, cfg, optimizer, scheduler)
 
     train_metrics = build_stages_list(list(cfg.module.metrics.values()), "train")
     test_metrics = build_stages_list(list(cfg.module.metrics.values()), "test")
@@ -160,10 +167,12 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
                         global_step,
                         train_metrics,
                         test_metrics,
-                        run)
+                        run,
+                        class_ids)
 
     if fabric.is_global_zero:
-        # _save_checkpoint(fabric, model, optimizer, scheduler, global_step, cfg)
+        if cfg.trainer.get("save_checkpoints", False):
+            _save_checkpoint(fabric, model, optimizer, scheduler, global_step, cfg)
         log.info("Training complete.")
         run.finish()
 
@@ -179,7 +188,8 @@ def train(fabric: Fabric,
           global_step: int,
           train_metrics: list,
           test_metrics: list,
-          run: wandb.Run) -> int:
+          run: wandb.Run,
+          class_ids: list | None = None) -> int:
     max_steps = cfg.trainer.max_steps
     log_every = cfg.trainer.get("log_every_n_steps", 50)
     validate_every = max_steps // cfg.trainer.validate_amount
@@ -221,11 +231,15 @@ def train(fabric: Fabric,
                          step=global_step)
 
             if global_step % validate_every == 0:
-                validate(fabric, model, test_loader, criterion, test_metrics, run, global_step)
+                validate(fabric, model, test_loader, criterion, test_metrics, run, global_step, class_ids)
                 model.train()
 
-            #if fabric.is_global_zero and global_step % save_every == 0:
-                #_save_checkpoint(fabric, model, optimizer, scheduler, global_step, cfg)
+            # Off by default: a full state checkpoint is ~2.5 GB for the
+            # 11 737-class XC head, and the 1250-step benchmark probes have no
+            # use for one. Long runs set `trainer.save_checkpoints=true` so they
+            # survive the 48 h submitit timeout and leave a final artifact.
+            if cfg.trainer.get("save_checkpoints", False) and global_step % save_every == 0:
+                _save_checkpoint(fabric, model, optimizer, scheduler, global_step, cfg)
 
             if global_step >= max_steps:
                 break
@@ -255,6 +269,30 @@ def _log_layer_weights(model: nn.Module, run: wandb.Run, global_step: int) -> No
     }, step=global_step)
 
 
+def _metric_logs(metric, class_ids: list | None = None) -> dict:
+    """W&B keys for one metric, expanding per-class metrics into one series each.
+
+    A metric built with ``average=None`` computes to a ``(num_labels,)`` tensor
+    rather than a scalar. Logging that under a single key would collide with the
+    macro metric of the same class and be unplottable, so each element gets its
+    own key under a ``test_<Metric>_per_class/`` section — one W&B panel per
+    class. Keys carry the class id from the label map (the gbifID for BirdSet)
+    when it is available, falling back to the label index.
+    """
+    value = metric.compute()
+    name = metric.__class__.__name__
+
+    if value.ndim == 0:
+        return {f"test/{name}": value}
+
+    short = "AP" if "AveragePrecision" in name else name
+    labels = class_ids if class_ids and len(class_ids) == len(value) else range(len(value))
+    return {
+        f"test_{short}_per_class/{label}": v.item()
+        for label, v in zip(labels, value)
+    }
+
+
 @torch.no_grad()
 def validate(fabric: Fabric,
              model: ViTClassifier,
@@ -262,7 +300,8 @@ def validate(fabric: Fabric,
              criterion,
              metrics: list,
              run: wandb.Run,
-             global_step: int = 0) -> None:
+             global_step: int = 0,
+             class_ids: list | None = None) -> None:
     model.eval()
     for batch in dataloder:
         with fabric.autocast():
@@ -274,9 +313,10 @@ def validate(fabric: Fabric,
             metric.update(preds.cpu(), targets.int().cpu())
 
     if fabric.is_global_zero:
-        run.log({"test/loss": loss.item(),
-                 **{f"test/{metric.__class__.__name__}": metric.compute() for metric in metrics}},
-                 step=global_step)
+        logs = {"test/loss": loss.item()}
+        for metric in metrics:
+            logs.update(_metric_logs(metric, class_ids))
+        run.log(logs, step=global_step)
         _log_layer_weights(model, run, global_step)
 
     for metric in metrics:
@@ -306,7 +346,39 @@ def _load_checkpoint(
     fabric: Fabric,
     model: ViTClassifier,
     cfg: DictConfig,
+    optimizer: AdamW | None = None,
+    scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
 ) -> int:
+    """Initialise from a pretraining checkpoint, or resume a training state.
+
+    Two different things, deliberately kept as two different config keys:
+
+    ``trainer.resume_from_checkpoint``
+        A *pretraining* checkpoint. Only its ``encoder.*`` weights are read, the
+        head is left at its fresh init, and training starts at step 0. This is
+        what every benchmark probe uses, and its behaviour is unchanged.
+
+    ``trainer.resume_from_state``
+        A checkpoint written by :func:`_save_checkpoint` *in this script*. Model,
+        optimizer and scheduler are restored in place and training continues from
+        the saved step. Needed for runs longer than the 48 h submitit timeout:
+        without it a timed-out run restarts from step 0 with a fresh head.
+
+    Set at most one. ``resume_from_state`` wins if both are given, since a
+    resume already carries the encoder weights the other key would supply.
+    """
+    state_path = cfg.trainer.get("resume_from_state")
+    if state_path:
+        state: dict[str, Any] = {"model": model}
+        if optimizer is not None:
+            state["optimizer"] = optimizer
+        if scheduler is not None:
+            state["scheduler"] = scheduler
+        remainder = fabric.load(state_path, state)
+        step = int(remainder.get("step", 0))
+        log.info(f"Resumed full training state from {state_path} at step {step}.")
+        return step
+
     resume_path = cfg.trainer.get("resume_from_checkpoint")
     if not resume_path:
         return 0

@@ -140,6 +140,8 @@ class ViTProtoFloat(ViTEncoder):
         num_classes: int,
         head_drop: float = 0.0,
         num_prototypes: int = 20,
+        mixer: str = "dense",
+        proto_chunk: int | None = None,
         **encoder_kwargs,
     ) -> None:
         super().__init__(**encoder_kwargs)
@@ -147,7 +149,9 @@ class ViTProtoFloat(ViTEncoder):
         self.embed_dim: int = encoder_kwargs.get("embed_dim", 768)
 
         self.head_drop = nn.Dropout(head_drop)
-        self.head = PrototypicalFloat(self.embed_dim, num_prototypes, num_classes)
+        self.head = PrototypicalFloat(
+            self.embed_dim, num_prototypes, num_classes, mixer=mixer,
+            proto_chunk=proto_chunk)
 
     def freeze_backbone(self, freeze: bool = True) -> None:
         """Freeze (or unfreeze) all parameters except the classification head.
@@ -211,6 +215,15 @@ class ViTProtoLayerwise(ViTProtoFloat):
         head_drop: Dropout applied before the prototype head (default: 0.0).
         num_prototypes: Prototypes per class for the :class:`PrototypicalFloat`
             head (default: 20).
+        mixer: How pooled prototype activations become logits — ``"dense"``
+            (default, every class sees every prototype) or
+            ``"block_diagonal"`` (each class sees only its own prototypes).
+            See :class:`PrototypicalFloat`; the dense mixer is quadratic in
+            ``num_classes`` and unusable above a few hundred classes.
+        proto_chunk: Chunk size along the prototype axis for the similarity
+            computation. ``None`` (default) computes it in one shot; set it when
+            ``num_prototypes * num_classes`` makes the intermediate too large.
+            Exact either way — see :class:`PrototypicalFloat`.
         layer_norm: If ``True`` (default), apply an independent LayerNorm to each
             block's output before the weighted sum, so layers with different
             activation scales are comparable. Set ``False`` to weight the raw
@@ -224,12 +237,16 @@ class ViTProtoLayerwise(ViTProtoFloat):
         head_drop: float = 0.0,
         num_prototypes: int = 20,
         layer_norm: bool = True,
+        mixer: str = "dense",
+        proto_chunk: int | None = None,
         **encoder_kwargs,
     ) -> None:
         super().__init__(
             num_classes=num_classes,
             head_drop=head_drop,
             num_prototypes=num_prototypes,
+            mixer=mixer,
+            proto_chunk=proto_chunk,
             **encoder_kwargs,
         )
 
@@ -293,24 +310,69 @@ class ViTProtoLayerwise(ViTProtoFloat):
 
 
 class PrototypicalFloat(nn.Module):  # protofloat
+    """Cosine-prototype head: per-class prototypes, top-k spatial pooling, mixer.
+
+    ``mixer`` selects how pooled prototype activations become class logits:
+
+    ``"dense"`` (default)
+        One ``nn.Linear(num_prototypes * num_classes, num_classes)`` — every
+        class's logit is a learned combination of *every* prototype. This is
+        what all published probes in this repo used and it is kept as the
+        default so their results stay reproducible.
+
+    ``"block_diagonal"``
+        Each class's logit reads only its own ``num_prototypes`` prototypes
+        (the standard PPNet formulation), so the mixer is
+        ``num_prototypes * num_classes + num_classes`` parameters instead of
+        ``num_prototypes * num_classes**2``. Required above a few hundred
+        classes: at Xeno-Canto's 11 737 species with 20 prototypes the dense
+        mixer is 2.755 **billion** parameters, against 0.25 M here. Prototypes
+        are laid out class-major, i.e. prototype ``c * num_prototypes + p``
+        belongs to class ``c``.
+
+    ``proto_chunk`` bounds peak activation memory. The cosine similarities are a
+    ``(B, num_prototypes * num_classes, H, W)`` tensor — 0.3 GB in bf16 at
+    PER's 132 classes and batch 256, but **30.8 GB** at Xeno-Canto's 11 737,
+    which no GPU has room for. Since top-k pooling is independent per prototype,
+    computing the similarities in chunks along the prototype axis is exact, not
+    an approximation: ``proto_chunk=4096`` caps that tensor at 0.54 GB. Leave it
+    ``None`` (default) to compute in one shot, which is what every published
+    probe did.
+    """
+
     def __init__(
         self,
         dim: int,
         num_prototypes: int,
         num_classes: int,
-        topk_k: int = 1
+        topk_k: int = 1,
+        mixer: str = "dense",
+        proto_chunk: int | None = None,
     ) -> None:
         super().__init__()
+        if mixer not in ("dense", "block_diagonal"):
+            raise ValueError(f"mixer must be 'dense' or 'block_diagonal', got {mixer!r}")
         self.num_classes = num_classes
         self.num_prototypes_per_class = num_prototypes
         self.num_prototypes_total = num_prototypes * num_classes
         self.topk_k = topk_k
+        self.mixer = mixer
+        self.proto_chunk = proto_chunk
 
         # 1x1 convolutional kernels
         self.prototype_vectors = nn.Parameter(torch.randn(
             self.num_prototypes_total, dim, 1, 1) * 0.02)
 
-        self.linear = nn.Linear(self.num_prototypes_total, num_classes)
+        if mixer == "dense":
+            self.linear = nn.Linear(self.num_prototypes_total, num_classes)
+        else:
+            # Same fan-in as one row of the dense mixer would see for its own
+            # class, so the initial logit scale matches nn.Linear's default.
+            bound = num_prototypes ** -0.5
+            self.class_weight = nn.Parameter(
+                torch.empty(num_classes, num_prototypes).uniform_(-bound, bound))
+            self.class_bias = nn.Parameter(
+                torch.empty(num_classes).uniform_(-bound, bound))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() == 2: #for cls-input
@@ -318,14 +380,34 @@ class PrototypicalFloat(nn.Module):  # protofloat
 
         # standard cosine similarity (activation) - NO BINARIZATION
         x_norm = F.normalize(x, dim=1)
-        p_norm = F.normalize(self.prototype_vectors, dim=1)  # directly normalize, no _binarise()
-        act = F.conv2d(x_norm, p_norm)              # (B, P, H, W)
-
-        # pooling & classification as before
-        B, P, _, _ = act.shape
-        act = act.view(B, P, -1)
+        B = x_norm.shape[0]
         k = self.topk_k if self.training else 1
 
-        # top-k pooling: taking the mean of the k strongest hits
-        pooled = act.topk(k, dim=-1).values.mean(-1)
-        return self.linear(pooled)
+        chunk = self.proto_chunk
+        if chunk is None or chunk >= self.num_prototypes_total:
+            p_norm = F.normalize(self.prototype_vectors, dim=1)  # directly normalize, no _binarise()
+            act = F.conv2d(x_norm, p_norm)              # (B, P, H, W)
+
+            # pooling & classification as before
+            P = act.shape[1]
+            act = act.view(B, P, -1)
+
+            # top-k pooling: taking the mean of the k strongest hits
+            pooled = act.topk(k, dim=-1).values.mean(-1)
+        else:
+            # Same computation, one slice of the prototype axis at a time, so the
+            # (B, P, H, W) similarity tensor is never materialised in full. Exact:
+            # both the cosine similarity and the top-k-over-space pooling are
+            # independent per prototype.
+            pooled = torch.cat([
+                F.conv2d(x_norm, F.normalize(self.prototype_vectors[start:start + chunk], dim=1))
+                 .view(B, -1, x_norm.shape[-2] * x_norm.shape[-1])
+                 .topk(k, dim=-1).values.mean(-1)
+                for start in range(0, self.num_prototypes_total, chunk)
+            ], dim=1)
+
+        if self.mixer == "dense":
+            return self.linear(pooled)
+        # (B, C, P) * (C, P) summed over P — each class sees only its own block.
+        pooled = pooled.view(B, self.num_classes, self.num_prototypes_per_class)
+        return (pooled * self.class_weight).sum(-1) + self.class_bias
