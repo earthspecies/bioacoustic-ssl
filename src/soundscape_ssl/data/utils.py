@@ -289,9 +289,9 @@ def class_ids_from_parquet(
 
         class_ids:
           _target_: soundscape_ssl.data.class_ids_from_parquet
-          path: metadata/xc_v0.2.0_classes.parquet
+          path: metadata/xc_v0.1.0_all_classes.parquet
 
-    Written for the full Xeno-Canto head, whose 11 737 ids would otherwise be
+    Written for the full Xeno-Canto head, whose 10 799 ids would otherwise be
     inlined in the dataset config and then copied four times into every W&B run
     config. Pointing at the file instead keeps the label space in exactly one
     place — the same file the model card and BirdSet logit masking read — so the

@@ -43,7 +43,7 @@ class SoundscapeMAEConfig(PretrainedConfig):
         proto_chunk: Chunk size along the prototype axis of the head's cosine
             similarity. Bounds peak activation memory and is exact — top-k
             pooling is independent per prototype. ``None`` computes in one shot,
-            which at the released head's 11 737 classes would need a 30.8 GB
+            which at the released head's 10 799 classes would need a 28.3 GB
             intermediate.
         **kwargs: Forwarded to :class:`~transformers.PretrainedConfig`, which is
             where ``id2label`` / ``label2id`` / ``num_labels`` come from.

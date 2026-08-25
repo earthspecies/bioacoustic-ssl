@@ -11,7 +11,7 @@ Two entry points:
 
 ``SoundscapeMAEForAudioClassification`` (``AutoModelForAudioClassification``)
     The same encoder, frozen during training, under a learned softmax fusion of
-    all 12 block outputs and a prototypical head over 11 737 Xeno-Canto taxa.
+    all 12 block outputs and a prototypical head over 10 799 Xeno-Canto taxa.
     ``config.id2label`` carries the taxon names; the ``gbifID`` behind each
     output index — the contract you need to restrict the logits to a species
     subset — ships beside the weights as ``xc_classes.parquet``.
@@ -286,8 +286,8 @@ class SoundscapeMAEPrototypicalHead(nn.Module):
     Each class owns ``config.num_prototypes`` prototype vectors and reads only
     its own (the standard PPNet block-diagonal formulation). The dense mixer the
     per-task probes in the paper used — every class reading every prototype — is
-    quadratic in the class count and would be 2.755 **billion** parameters at
-    this head's 11 737 classes, so it is not an option here and is not offered.
+    quadratic in the class count and would be 2.332 **billion** parameters at
+    this head's 10 799 classes, so it is not an option here and is not offered.
 
     Each prototype's activation is the strongest cosine similarity anywhere on
     the feature map; the class logit is a learned weighted sum of its own
@@ -328,7 +328,7 @@ class SoundscapeMAEPrototypicalHead(nn.Module):
         else:
             # Same value, one slice of the prototype axis at a time, so the
             # (batch, prototypes, grid_h, grid_w) similarity tensor is never
-            # materialised in full — 30.8 GB at 11 737 classes and batch 256.
+            # materialised in full — 28.3 GB at 10 799 classes and batch 256.
             # Exact: cosine similarity and top-k-over-space are both independent
             # per prototype.
             pooled = torch.cat(

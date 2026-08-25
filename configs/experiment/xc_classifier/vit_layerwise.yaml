@@ -2,8 +2,8 @@
 
 # Layerwise prototypical probing over ALL of Xeno-Canto — the training half of
 # the HF model release. Frozen MAE encoder, learned softmax fusion of all 12
-# blocks, prototypical head over all 11 737 Xeno-Canto taxa — 9 887 birds plus
-# 1 007 insects, 673 amphibians and 170 mammals, so not a bird-only head.
+# blocks, prototypical head over all 10 799 Xeno-Canto taxa — 9 733 birds plus
+# 508 amphibians, 423 insects and 135 mammals, so not a bird-only head.
 #
 # Relationship to the benchmark sweeps: this is sweeps/layerwise/birdset/vit with
 # the species filter removed and the head's mixer swapped (see
@@ -12,23 +12,31 @@
 # weighting — is inherited unchanged, so the release model is trained by the same
 # recipe the ablation validated rather than a re-tuned one.
 #
-# Evaluation is NOT part of this run. The XC `validation` split (9 321 recordings
-# after dropping the 11 species absent from `train`) is a training monitor on the
-# same distribution. Read `test/TopKAccuracy` as the signal: only 3 337 of the
-# 11 737 classes have any positive in that split, so the macro cmAP and AUROC are
-# structurally depressed by the ~72 % of classes that cannot be scored, and their
-# absolute values are not comparable to any BirdSet number. The real evaluation is BirdSet with logit masking, run later
-# against the final checkpoint: restrict the 11 737 logits to a task's species
-# and score those. `metadata/xc_v0.2.0_classes.parquet` is the map from output
-# index to gbifID that masking needs. Note that 3 BirdSet species (1 in PER, 2 in
-# UHH) have no Xeno-Canto recording at all, so no head trained on XC can carry
-# them — they were equally untrainable in the per-task probes.
+# Validation is OFF (`trainer.validate_amount: 0`). The only in-distribution
+# split available is XC `validation`, which would have measured the head against
+# the distribution it already trains on while saying nothing about the metric we
+# actually care about — and only 3 178 of the 10 799 classes have any positive in
+# it, so its macro cmAP and AUROC are structurally depressed by the ~71 % of
+# classes that cannot be scored and are comparable to no BirdSet number. Worse,
+# the train split is now `all`, which contains `validation`, so it would be
+# scoring on training data. Watch the `train/` loss and metrics for run health
+# instead.
+#
+# The evaluation is BirdSet with logit masking, run later against the saved
+# checkpoint: restrict the 10 799 logits to a task's species and score those.
+# `metadata/xc_v0.1.0_all_classes.parquet` is the map from output index to gbifID
+# that masking needs. It is built from the same (version, split) pair the train
+# stream reads — rebuild it with `scripts/build_xc_label_space.py` if either
+# changes, or the label space and the corpus drift apart. Note that 3 BirdSet species (1 in PER, 2 in UHH) have no
+# Xeno-Canto recording at all, so no head trained on XC can carry them — they
+# were equally untrainable in the per-task probes.
 #
 # Two arms, one per backbone: XC (1M) and XC + NASA events (1M), the two 1M-step
 # cold-start encoders. Frozen, so this is a readout of those encoders, not a
 # re-training of them.
 #
-# Cost: 100 000 steps at batch 256 is ~35 epochs over 734 910 recordings.
+# Cost: 100 000 steps over 596 526 recordings is ~43 epochs at batch 256, ~86 at
+# the batch 512 `data/loaders: pretrain` actually sets.
 # Measured XC-streaming throughput puts that at 24-48 h per arm, i.e. at the
 # 48 h submitit timeout — hence `save_checkpoints`. If a job times out, resume it
 # with `trainer.resume_from_state=<the newest step_*.ckpt>`, which restores the
@@ -38,12 +46,13 @@
 defaults:
   - override /data: train
   - override /data/datasets: train/xc_all
-  - override /data/loaders: default
+  - override /data/loaders: pretrain
   - override /module/model: layerwise/vit_xc
-  # Drop `map_per_class`, which the benchmark probes log. At 11 737 classes it
-  # would create one W&B key per species per validation — 176 000 distinct
-  # series over the run. The per-class breakdown that matters is per BirdSet
-  # task, and it belongs to the masked evaluation, not to this monitor.
+  # Drop `map_per_class`, which the benchmark probes log. These are still built
+  # for the *train* stream, logged every `log_every_n_steps`, so at 10 799
+  # classes it would create one W&B key per species per log step. The
+  # per-class breakdown that matters is per BirdSet task, and it belongs to
+  # the masked evaluation.
   - override /module/metrics: [map, auroc, t1]
 
 run_name: XCall-${trainer.resume_from_checkpoint}-${seed}-layerwise
@@ -59,15 +68,18 @@ hydra:
       # — the same workaround sweeps/proto/birdset/bat.yaml uses. Single-valued,
       # so it adds no sweep dimension.
       #
-      # ~2.5 GB per checkpoint for the 11 737-class head (1.07 GB model +
-      # 1.44 GB AdamW state over the 180.5 M trainable params) -> 4 saves per
+      # ~2.3 GB per checkpoint for the 10 799-class head (1.01 GB model +
+      # 1.33 GB AdamW state over the 166.1 M trainable params) -> 4 saves per
       # arm. The last is the release artefact; the others exist so a job that
       # hits the 48 h submitit timeout can be resumed with
       # `trainer.resume_from_state=<newest step_*.ckpt>` instead of silently
       # restarting from step 0 with a fresh head.
+      # No validation: scored later by masked BirdSet evaluation against the
+      # saved checkpoint, not on-line. See the header.
+      trainer.validate_amount: 0
       trainer.save_checkpoints: true
       trainer.save_every_n_steps: 25000
       # trainer/train.yaml logs every step, which is right for a 1250-step probe
       # and 100 000 W&B rows of loss here.
       trainer.log_every_n_steps: 50
-      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt
+      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt

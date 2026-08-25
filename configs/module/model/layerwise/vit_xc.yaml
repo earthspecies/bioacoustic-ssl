@@ -4,7 +4,7 @@ defaults:
 
 _target_: soundscape_ssl.models.ViTProtoLayerwise
 
-# Classification head over the full Xeno-Canto label space (11 737 taxa).
+# Classification head over the full Xeno-Canto label space (10 799 taxa).
 num_classes: ${data.num_classes}
 num_prototypes: 20
 head_drop: 0.0
@@ -12,10 +12,10 @@ head_drop: 0.0
 # The ONLY difference from layerwise/vit. `dense` — every class's logit reading a
 # learned combination of every prototype — is an nn.Linear(num_prototypes *
 # num_classes, num_classes), i.e. quadratic in num_classes: 2.4 M parameters at
-# PER's 132 classes but 2.755 BILLION at 11 737, which is not instantiable. The
+# PER's 132 classes but 2.332 BILLION at 10 799, which is not instantiable. The
 # block-diagonal mixer gives each class its own 20 prototypes and nothing else
-# (the standard PPNet formulation), so the mixer is 0.25 M parameters and the
-# head is 180.5 M, dominated by the prototypes themselves.
+# (the standard PPNet formulation), so the mixer is 0.23 M parameters and the
+# head is 166.1 M, dominated by the prototypes themselves.
 #
 # This is a real protocol difference from the six published arms' probes, which
 # all used the dense mixer, and it is why this run is a release artefact rather
@@ -26,8 +26,8 @@ mixer: block_diagonal
 # chunking the similarity computation along the prototype axis changes nothing
 # numerically — verified against the unchunked path, values and gradients).
 #
-# Without it the cosine-similarity tensor is (batch, 20 * 11737, 8, 32) =
-# 30.8 GB in bf16 at batch 256, which fits on no GPU. At 4096 prototypes per
+# Without it the cosine-similarity tensor is (batch, 20 * 10799, 8, 32) =
+# 28.3 GB in bf16 at batch 256, which fits on no GPU. At 4096 prototypes per
 # chunk the same tensor peaks at 0.54 GB. `null` (the default, and what every
 # published probe used) computes it in one shot, which is fine at 132 classes
 # (0.3 GB) and impossible here.

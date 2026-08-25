@@ -9,15 +9,16 @@
 #SBATCH --gres=gpu:0
 
 # Train the full Xeno-Canto classification head for the HF model release:
-# layerwise prototypical probing of a frozen 1M-step MAE encoder over all 11 737
-# XC species, 100 000 steps at batch 256 (~35 epochs of 734 910 recordings).
+# layerwise prototypical probing of a frozen 1M-step MAE encoder over all 10 799
+# XC species, 100 000 steps over 596 526 recordings (~43 epochs at batch 256, ~86
+# at the batch 512 `data/loaders: pretrain` sets).
 #
 # Two GPU jobs, one per backbone (XC 1M and XC + NASA events 1M). Budget 24-48 h
 # each; they run concurrently under the launcher's array_parallelism.
 #
 # Resources are overridden away from the launcher defaults because this streams
 # the WHOLE Xeno-Canto metadata frame, not one BirdSet task's few thousand rows:
-# 734 910 rows x 87 columns, copied into every dataloader worker by `spawn`.
+# 596 526 rows x 83 columns, copied into every dataloader worker by `spawn`.
 # gpu_h100.yaml's 26 CPUs / 120 GB is sized for the benchmark probes; this
 # mirrors scripts/slurm/pretrain.sh, which streams the same corpus.
 #
@@ -40,8 +41,8 @@
 #     hydra/launcher=gpu_h100 hydra.launcher.cpus_per_task=52 \
 #     hydra.launcher.mem_gb=300
 #
-# Evaluation is a separate, later step: BirdSet with the 11 737 logits masked
-# down to each task's species. metadata/xc_v0.2.0_classes.parquet maps output
+# Evaluation is a separate, later step: BirdSet with the 10 799 logits masked
+# down to each task's species. metadata/xc_v0.1.0_all_classes.parquet maps output
 # index -> gbifID, and the index is the rank of the gbifID in ascending order.
 
 set -eo pipefail
@@ -55,12 +56,13 @@ cd ~/soundscape_mae
 
 mkdir -p logs checkpoints
 
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-
 uv sync
 
 # The label space must exist before the dataset config can read it. Idempotent:
-# rebuilds the same 11 737-row table from the same split CSV.
+# rebuilds the same 10 799-row table from the same split CSV. Its defaults — XC
+# v0.1.0 `all` — are the (version, split) pair the dataset config streams, and
+# they have to stay that way: the label space is only correct for the split it
+# was built from.
 uv run python scripts/build_xc_label_space.py
 
 srun uv run python scripts/birdset_eval.py --multirun \

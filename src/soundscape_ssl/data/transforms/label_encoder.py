@@ -33,6 +33,18 @@ class MultiHotEncoder(Transform):
                 raw = [raw]
             vec = torch.zeros(self.num_classes, dtype=torch.float32)
             for label in raw:
+                # `MultiLabelFromFeature` yields None for a class outside its
+                # label map, and `vec[None] = 1.0` is a whole-tensor assignment
+                # in torch: it marks *every* class positive instead of raising.
+                # That turned a label-space/split mismatch into 100 000 steps of
+                # silently corrupted targets, so it fails here instead.
+                if label is None:
+                    raise ValueError(
+                        "MultiHotEncoder got a None label, which means the sample's "
+                        "class is absent from the label map. Rebuild the label space "
+                        "from the split being trained on (scripts/build_xc_label_space.py) "
+                        "or filter the sample out."
+                    )
                 try:
                     vec[label] = 1.0
                 except Exception as e:

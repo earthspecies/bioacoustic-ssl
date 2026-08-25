@@ -9,7 +9,7 @@ Two artifacts, one HuggingFace model repo, one subfolder each (spec ADR 0002):
 
 ``xc-classifier``
     That same encoder, frozen, under the layerwise prototypical head trained
-    over all 11 737 Xeno-Canto taxa. Carries its own encoder copy, so it loads on
+    over all 10 799 Xeno-Canto taxa. Carries its own encoder copy, so it loads on
     its own, and ships ``xc_classes.parquet`` beside the weights — the map from
     output index to ``gbifID`` that logit masking needs.
 
@@ -77,7 +77,7 @@ PUBLISHED_MODULES = (
     "modeling_soundscape_mae.py",
     "feature_extraction_soundscape_mae.py",
 )
-DEFAULT_CLASSES = Path("metadata/xc_v0.2.0_classes.parquet")
+DEFAULT_CLASSES = Path("metadata/xc_v0.1.0_all_classes.parquet")
 
 
 def load_model_state(ckpt: Path) -> dict[str, torch.Tensor]:
@@ -177,6 +177,15 @@ def export_classifier(ckpt: Path, out: Path, classes: Path) -> None:
     config = build_config(id2label=dict(zip(labels.label_index, labels.canonical_name, strict=True)))
 
     state = load_model_state(ckpt)
+    checkpoint_labels = state["head.class_bias"].shape[0]
+    if checkpoint_labels != config.num_labels:
+        raise SystemExit(
+            f"{ckpt} has a {checkpoint_labels}-class head, but {classes} defines "
+            f"{config.num_labels} classes. The label space and the checkpoint must be the "
+            "same one — pass the parquet the head was trained against, or re-export a head "
+            "trained on this label space. Publishing the mismatch would mislabel every logit."
+        )
+
     reference = ViTProtoLayerwise(
         num_classes=config.num_labels,
         mixer="block_diagonal",
