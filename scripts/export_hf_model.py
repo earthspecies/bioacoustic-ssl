@@ -48,9 +48,9 @@ import torch
 import torch.nn as nn
 
 from soundscape_ssl.hf import (
-    SoundscapeMAEFeatureExtractor,
-    SoundscapeMAEForAudioClassification,
-    SoundscapeMAEModel,
+    BirdMAE2FeatureExtractor,
+    BirdMAE2ForAudioClassification,
+    BirdMAE2Model,
 )
 from soundscape_ssl.hf.conversion import (
     RELEASE_HEAD,
@@ -65,17 +65,17 @@ from soundscape_ssl.models import ViTEncoder, ViTProtoLayerwise
 # resolves without this repository. Written into both config.json and
 # preprocessor_config.json.
 AUTO_MAP = {
-    "AutoConfig": "configuration_soundscape_mae.SoundscapeMAEConfig",
-    "AutoModel": "modeling_soundscape_mae.SoundscapeMAEModel",
+    "AutoConfig": "configuration_birdmae2.BirdMAE2Config",
+    "AutoModel": "modeling_birdmae2.BirdMAE2Model",
     "AutoModelForAudioClassification": (
-        "modeling_soundscape_mae.SoundscapeMAEForAudioClassification"
+        "modeling_birdmae2.BirdMAE2ForAudioClassification"
     ),
-    "AutoFeatureExtractor": "feature_extraction_soundscape_mae.SoundscapeMAEFeatureExtractor",
+    "AutoFeatureExtractor": "feature_extraction_birdmae2.BirdMAE2FeatureExtractor",
 }
 PUBLISHED_MODULES = (
-    "configuration_soundscape_mae.py",
-    "modeling_soundscape_mae.py",
-    "feature_extraction_soundscape_mae.py",
+    "configuration_birdmae2.py",
+    "modeling_birdmae2.py",
+    "feature_extraction_birdmae2.py",
 )
 DEFAULT_CLASSES = Path("metadata/xc_v0.1.0_all_classes.parquet")
 
@@ -131,7 +131,7 @@ def write_artifact(model: nn.Module, out: Path) -> None:
     model.config.auto_map = AUTO_MAP
     model.save_pretrained(out)
 
-    extractor = SoundscapeMAEFeatureExtractor()
+    extractor = BirdMAE2FeatureExtractor()
     extractor.auto_map = AUTO_MAP
     extractor.save_pretrained(out)
 
@@ -151,7 +151,7 @@ def export_base(ckpt: Path, out: Path) -> None:
     reference = ViTEncoder(**reference_encoder_kwargs())
     reference.load_state_dict(encoder_state_dict(state), strict=True)
 
-    published = SoundscapeMAEModel(build_config())
+    published = BirdMAE2Model(build_config())
     published.load_state_dict(encoder_state_dict(state), strict=True)
 
     torch.manual_seed(0)
@@ -159,7 +159,7 @@ def export_base(ckpt: Path, out: Path) -> None:
 
     verify(reference, published, inputs, "encoder")
     write_artifact(published, out)
-    verify(reference, SoundscapeMAEModel.from_pretrained(out), inputs, "encoder, reloaded from disk")
+    verify(reference, BirdMAE2Model.from_pretrained(out), inputs, "encoder, reloaded from disk")
 
     print(f"{ckpt} -> {out}")
     print(f"  {sum(p.numel() for p in published.parameters()):,} parameters")
@@ -195,7 +195,7 @@ def export_classifier(ckpt: Path, out: Path, classes: Path) -> None:
     )
     reference.load_state_dict(state, strict=True)
 
-    published = SoundscapeMAEForAudioClassification(config)
+    published = BirdMAE2ForAudioClassification(config)
     published.load_state_dict(classifier_state_dict(state), strict=True)
 
     torch.manual_seed(0)
@@ -206,7 +206,7 @@ def export_classifier(ckpt: Path, out: Path, classes: Path) -> None:
     shutil.copy(classes, out / "xc_classes.parquet")
     verify(
         reference,
-        SoundscapeMAEForAudioClassification.from_pretrained(out),
+        BirdMAE2ForAudioClassification.from_pretrained(out),
         inputs,
         "classifier logits, reloaded from disk",
     )

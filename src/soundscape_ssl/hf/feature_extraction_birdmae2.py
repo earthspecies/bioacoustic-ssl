@@ -1,4 +1,4 @@
-"""The mel front-end the released Soundscape-MAE encoder was trained on.
+"""The mel front-end the released BirdMAE2 encoder was trained on.
 
 Ships inside the HuggingFace model repo. Needs ``torchaudio`` on top of ``torch``
 and ``transformers``: the released spectrogram is ``torchaudio``'s
@@ -73,7 +73,7 @@ def _amplitude_to_db(top_db: float) -> T.AmplitudeToDB:
     return T.AmplitudeToDB(stype="power", top_db=top_db)
 
 
-class SoundscapeMAEFeatureExtractor(SequenceFeatureExtractor):
+class BirdMAE2FeatureExtractor(SequenceFeatureExtractor):
     """Turns raw audio into the spectrogram the released encoder expects.
 
     Args:
@@ -170,7 +170,7 @@ class SoundscapeMAEFeatureExtractor(SequenceFeatureExtractor):
         Returns:
             :class:`~transformers.BatchFeature` with ``input_values`` of shape
             ``(batch, 1, num_mel_bins, num_frames)``, ready for
-            :class:`SoundscapeMAEModel`.
+            :class:`BirdMAE2Model`.
 
         Raises:
             ValueError: If ``sampling_rate`` is not the rate the model expects,
@@ -254,4 +254,4 @@ class SoundscapeMAEFeatureExtractor(SequenceFeatureExtractor):
         return spectrogram
 
 
-__all__ = ["SoundscapeMAEFeatureExtractor"]
+__all__ = ["BirdMAE2FeatureExtractor"]

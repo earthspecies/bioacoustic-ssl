@@ -1,12 +1,12 @@
-"""The published HuggingFace model code for the Soundscape-MAE release.
+"""The published HuggingFace model code for the BirdMAE2 release.
 
 Three modules are copied verbatim into the HuggingFace model repo, and import
 nothing from this package so they work with no more than ``torch``,
 ``torchaudio`` and ``transformers`` installed:
 
-* ``configuration_soundscape_mae`` — the config,
-* ``modeling_soundscape_mae`` — the encoder and the classification head,
-* ``feature_extraction_soundscape_mae`` — the mel front-end.
+* ``configuration_birdmae2`` — the config,
+* ``modeling_birdmae2`` — the encoder and the classification head,
+* ``feature_extraction_birdmae2`` — the mel front-end.
 
 ``conversion`` stays behind: it maps training checkpoints onto the published
 state dicts and is only ever run by ``scripts/export_hf_model.py``.
@@ -34,12 +34,12 @@ from transformers import (
     AutoModelForAudioClassification,
 )
 
-from .configuration_soundscape_mae import SoundscapeMAEConfig
-from .feature_extraction_soundscape_mae import SoundscapeMAEFeatureExtractor
-from .modeling_soundscape_mae import (
-    SoundscapeMAEForAudioClassification,
-    SoundscapeMAEModel,
-    SoundscapeMAEPreTrainedModel,
+from .configuration_birdmae2 import BirdMAE2Config
+from .feature_extraction_birdmae2 import BirdMAE2FeatureExtractor
+from .modeling_birdmae2 import (
+    BirdMAE2ForAudioClassification,
+    BirdMAE2Model,
+    BirdMAE2PreTrainedModel,
 )
 
 
@@ -51,12 +51,12 @@ def register_auto_classes() -> None:
     them once already.
     """
     try:
-        AutoConfig.register(SoundscapeMAEConfig.model_type, SoundscapeMAEConfig)
-        AutoModel.register(SoundscapeMAEConfig, SoundscapeMAEModel)
+        AutoConfig.register(BirdMAE2Config.model_type, BirdMAE2Config)
+        AutoModel.register(BirdMAE2Config, BirdMAE2Model)
         AutoModelForAudioClassification.register(
-            SoundscapeMAEConfig, SoundscapeMAEForAudioClassification
+            BirdMAE2Config, BirdMAE2ForAudioClassification
         )
-        AutoFeatureExtractor.register(SoundscapeMAEConfig, SoundscapeMAEFeatureExtractor)
+        AutoFeatureExtractor.register(BirdMAE2Config, BirdMAE2FeatureExtractor)
     except ValueError:
         pass
 
@@ -64,10 +64,10 @@ def register_auto_classes() -> None:
 register_auto_classes()
 
 __all__ = [
-    "SoundscapeMAEConfig",
-    "SoundscapeMAEFeatureExtractor",
-    "SoundscapeMAEForAudioClassification",
-    "SoundscapeMAEModel",
-    "SoundscapeMAEPreTrainedModel",
+    "BirdMAE2Config",
+    "BirdMAE2FeatureExtractor",
+    "BirdMAE2ForAudioClassification",
+    "BirdMAE2Model",
+    "BirdMAE2PreTrainedModel",
     "register_auto_classes",
 ]
