@@ -19,6 +19,8 @@ runs/
 tb_logs/
 lightning_logs/
 checkpoints/
+# exported HuggingFace artifacts (scripts/export_hf_model.py) — they go to the Hub
+artifacts/
 *.pt
 *.pth
 *.safetensors
