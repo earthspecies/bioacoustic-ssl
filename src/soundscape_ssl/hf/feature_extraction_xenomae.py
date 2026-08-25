@@ -1,4 +1,4 @@
-"""The mel front-end the released BirdMAE2 encoder was trained on.
+"""The mel front-end the released XenoMAE encoder was trained on.
 
 Ships inside the HuggingFace model repo. Needs ``torchaudio`` on top of ``torch``
 and ``transformers``: the released spectrogram is ``torchaudio``'s
@@ -73,7 +73,7 @@ def _amplitude_to_db(top_db: float) -> T.AmplitudeToDB:
     return T.AmplitudeToDB(stype="power", top_db=top_db)
 
 
-class BirdMAE2FeatureExtractor(SequenceFeatureExtractor):
+class XenoMAEFeatureExtractor(SequenceFeatureExtractor):
     """Turns raw audio into the spectrogram the released encoder expects.
 
     Args:
@@ -170,7 +170,7 @@ class BirdMAE2FeatureExtractor(SequenceFeatureExtractor):
         Returns:
             :class:`~transformers.BatchFeature` with ``input_values`` of shape
             ``(batch, 1, num_mel_bins, num_frames)``, ready for
-            :class:`BirdMAE2Model`.
+            :class:`XenoMAEModel`.
 
         Raises:
             ValueError: If ``sampling_rate`` is not the rate the model expects,
@@ -254,4 +254,4 @@ class BirdMAE2FeatureExtractor(SequenceFeatureExtractor):
         return spectrogram
 
 
-__all__ = ["BirdMAE2FeatureExtractor"]
+__all__ = ["XenoMAEFeatureExtractor"]

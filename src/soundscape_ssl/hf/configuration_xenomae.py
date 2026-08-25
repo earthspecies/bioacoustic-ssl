@@ -1,4 +1,4 @@
-"""Configuration for the released BirdMAE2 models.
+"""Configuration for the released XenoMAE models.
 
 Ships inside the HuggingFace model repo, so it must stay importable with nothing
 but ``torch`` and ``transformers`` installed — it deliberately imports nothing
@@ -19,8 +19,8 @@ from typing import Any
 from transformers import PretrainedConfig
 
 
-class BirdMAE2Config(PretrainedConfig):
-    """Config for :class:`BirdMAE2Model` and its classification head.
+class XenoMAEConfig(PretrainedConfig):
+    """Config for :class:`XenoMAEModel` and its classification head.
 
     Args:
         num_mel_bins: Mel bins of the input spectrogram (the height of the
@@ -49,7 +49,7 @@ class BirdMAE2Config(PretrainedConfig):
             where ``id2label`` / ``label2id`` / ``num_labels`` come from.
     """
 
-    model_type = "birdmae2"
+    model_type = "xenomae"
 
     def __init__(
         self,
@@ -97,4 +97,4 @@ class BirdMAE2Config(PretrainedConfig):
         return grid_h * grid_w
 
 
-__all__ = ["BirdMAE2Config"]
+__all__ = ["XenoMAEConfig"]

@@ -6,7 +6,7 @@ function per artifact rather than a dict comprehension buried in a script, and
 so the released geometry is stated once.
 
 The mapping is deliberately trivial. Every module in
-:mod:`soundscape_ssl.hf.modeling_birdmae2` carries the name its
+:mod:`soundscape_ssl.hf.modeling_xenomae` carries the name its
 training-time counterpart carries, so converting a checkpoint moves prefixes
 around and touches no tensor. That is the property worth having: a conversion
 that reshapes or renames weights is a conversion that can silently be wrong.
@@ -16,7 +16,7 @@ from collections.abc import Mapping
 
 import torch
 
-from .configuration_birdmae2 import BirdMAE2Config
+from .configuration_xenomae import XenoMAEConfig
 
 # `configs/module/model/backbone/vit.yaml` — the geometry every released
 # artifact was trained with. ViT-B/16 over a (128 mel, 512 frame) input, so an
@@ -46,7 +46,7 @@ HEAD_KEY_PREFIXES = ("head.", "layer_weights", "layer_norms.")
 
 
 def encoder_state_dict(state: Mapping[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    """Published :class:`BirdMAE2Model` weights from a training state dict.
+    """Published :class:`XenoMAEModel` weights from a training state dict.
 
     Accepts either an MAE training checkpoint's ``model`` dict, whose keys are
     prefixed ``encoder.`` and ``decoder.``, or a bare ``ViTEncoder`` state dict.
@@ -87,7 +87,7 @@ def classifier_state_dict(state: Mapping[str, torch.Tensor]) -> dict[str, torch.
     }
 
 
-def build_config(id2label: dict[int, str] | None = None) -> BirdMAE2Config:
+def build_config(id2label: dict[int, str] | None = None) -> XenoMAEConfig:
     """The released config: fixed geometry, plus a label map when there is a head.
 
     Args:
@@ -98,8 +98,8 @@ def build_config(id2label: dict[int, str] | None = None) -> BirdMAE2Config:
         The config for the artifact being exported.
     """
     if id2label is None:
-        return BirdMAE2Config(**RELEASE_GEOMETRY, **RELEASE_HEAD)
-    return BirdMAE2Config(
+        return XenoMAEConfig(**RELEASE_GEOMETRY, **RELEASE_HEAD)
+    return XenoMAEConfig(
         **RELEASE_GEOMETRY,
         **RELEASE_HEAD,
         id2label=id2label,

@@ -1,15 +1,15 @@
-"""The released BirdMAE2 encoder and its Xeno-Canto classification head.
+"""The released XenoMAE encoder and its Xeno-Canto classification head.
 
 Ships inside the HuggingFace model repo, so it imports nothing from
 ``soundscape_ssl``: ``torch`` and ``transformers`` are the whole dependency set.
 Two entry points:
 
-``BirdMAE2Model`` (``AutoModel``)
+``XenoMAEModel`` (``AutoModel``)
     The pretrained ViT-B/16 encoder. Takes a mel spectrogram, returns token
     embeddings — 257 tokens of 768 dims, CLS first — plus the CLS token as
     ``pooler_output``.
 
-``BirdMAE2ForAudioClassification`` (``AutoModelForAudioClassification``)
+``XenoMAEForAudioClassification`` (``AutoModelForAudioClassification``)
     The same encoder, frozen during training, under a learned softmax fusion of
     all 12 block outputs and a prototypical head over 10 799 Xeno-Canto taxa.
     ``config.id2label`` carries the taxon names; the ``gbifID`` behind each
@@ -19,7 +19,7 @@ Two entry points:
 Every module here is a transcription of the training-time implementation
 (``soundscape_ssl.models.architectures.vit``), op for op and name for name, so
 that loading a converted checkpoint is a key rename rather than a
-re-implementation that happens to agree. ``tests/unittests/test_hf_birdmae2.py``
+re-implementation that happens to agree. ``tests/unittests/test_hf_xenomae.py``
 asserts the two agree bit-exactly, and ``scripts/export_hf_model.py`` re-asserts
 it against the real checkpoint at export time. Keep it that way: an
 optimisation here that changes a single floating-point op invalidates the
@@ -32,7 +32,7 @@ from torch import nn
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithPooling, SequenceClassifierOutput
 
-from .configuration_birdmae2 import BirdMAE2Config
+from .configuration_xenomae import XenoMAEConfig
 
 
 def get_1d_sincos_pos_embed_from_grid(embed_dim: int, pos: torch.Tensor) -> torch.Tensor:
@@ -89,10 +89,10 @@ def get_2d_sincos_pos_embed(
     return pos_embed
 
 
-class BirdMAE2PatchEmbed(nn.Module):
+class XenoMAEPatchEmbed(nn.Module):
     """Non-overlapping patch projection of a mel spectrogram to token embeddings."""
 
-    def __init__(self, config: BirdMAE2Config) -> None:
+    def __init__(self, config: XenoMAEConfig) -> None:
         """Build the patch projection from ``config``'s geometry."""
         super().__init__()
         self.grid_size = config.grid_size
@@ -114,10 +114,10 @@ class BirdMAE2PatchEmbed(nn.Module):
         return x.flatten(2).transpose(1, 2)
 
 
-class BirdMAE2Attention(nn.Module):
+class XenoMAEAttention(nn.Module):
     """Multi-head self-attention with optional QK-norm, via scaled dot product."""
 
-    def __init__(self, config: BirdMAE2Config) -> None:
+    def __init__(self, config: XenoMAEConfig) -> None:
         """Build the fused QKV projection, the output projection and QK norms."""
         super().__init__()
         self.num_heads = config.num_attention_heads
@@ -148,10 +148,10 @@ class BirdMAE2Attention(nn.Module):
         return self.proj(x)
 
 
-class BirdMAE2MLP(nn.Module):
+class XenoMAEMLP(nn.Module):
     """The per-block feed-forward network."""
 
-    def __init__(self, config: BirdMAE2Config) -> None:
+    def __init__(self, config: XenoMAEConfig) -> None:
         """Build the two-layer GELU MLP at ``config.mlp_ratio`` expansion."""
         super().__init__()
         hidden = int(config.hidden_size * config.mlp_ratio)
@@ -164,16 +164,16 @@ class BirdMAE2MLP(nn.Module):
         return self.fc2(self.act(self.fc1(x)))
 
 
-class BirdMAE2Layer(nn.Module):
+class XenoMAELayer(nn.Module):
     """One pre-norm transformer block."""
 
-    def __init__(self, config: BirdMAE2Config) -> None:
+    def __init__(self, config: XenoMAEConfig) -> None:
         """Build the block's two norms, attention and MLP."""
         super().__init__()
         self.norm1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.attn = BirdMAE2Attention(config)
+        self.attn = XenoMAEAttention(config)
         self.norm2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.mlp = BirdMAE2MLP(config)
+        self.mlp = XenoMAEMLP(config)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Residual attention followed by residual MLP."""
@@ -181,14 +181,14 @@ class BirdMAE2Layer(nn.Module):
         return x + self.mlp(self.norm2(x))
 
 
-class BirdMAE2PreTrainedModel(PreTrainedModel):
+class XenoMAEPreTrainedModel(PreTrainedModel):
     """Shared HuggingFace plumbing: config class, weight init, input name."""
 
-    config_class = BirdMAE2Config
-    config: BirdMAE2Config
+    config_class = XenoMAEConfig
+    config: XenoMAEConfig
     base_model_prefix = "encoder"
     main_input_name = "input_values"
-    _no_split_modules = ["BirdMAE2Layer"]
+    _no_split_modules = ["XenoMAELayer"]
 
     def _init_weights(self, module: nn.Module) -> None:
         """Initialise a freshly built module, matching the training-time init."""
@@ -200,15 +200,15 @@ class BirdMAE2PreTrainedModel(PreTrainedModel):
         elif isinstance(module, nn.LayerNorm):
             nn.init.ones_(module.weight)
             nn.init.zeros_(module.bias)
-        elif isinstance(module, BirdMAE2Model):
+        elif isinstance(module, XenoMAEModel):
             nn.init.trunc_normal_(module.cls_token, std=std)
 
 
-class BirdMAE2Model(BirdMAE2PreTrainedModel):
+class XenoMAEModel(XenoMAEPreTrainedModel):
     """The pretrained encoder: mel spectrogram in, token embeddings out.
 
     The input is a ``(batch, 1, num_mel_bins, num_frames)`` spectrogram, which
-    :class:`BirdMAE2FeatureExtractor` produces from audio. Feeding anything
+    :class:`XenoMAEFeatureExtractor` produces from audio. Feeding anything
     else — a differently-scaled mel, a transposed one, a different frame count —
     is silently wrong rather than an error, so use the shipped extractor.
 
@@ -223,17 +223,17 @@ class BirdMAE2Model(BirdMAE2PreTrainedModel):
     # thing to do, it carries its own copy — does not warn about the head.
     _keys_to_ignore_on_load_unexpected = [r"^head\.", r"^layer_weights", r"^layer_norms\."]
 
-    def __init__(self, config: BirdMAE2Config) -> None:
+    def __init__(self, config: XenoMAEConfig) -> None:
         """Build the patch embedding, the position table and the block stack."""
         super().__init__(config)
-        self.patch_embed = BirdMAE2PatchEmbed(config)
+        self.patch_embed = XenoMAEPatchEmbed(config)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, config.hidden_size))
         self.register_buffer(
             "pos_embed",
             get_2d_sincos_pos_embed(config.hidden_size, *config.grid_size, cls_token=True).unsqueeze(0),
         )
         self.blocks = nn.ModuleList(
-            [BirdMAE2Layer(config) for _ in range(config.num_hidden_layers)]
+            [XenoMAELayer(config) for _ in range(config.num_hidden_layers)]
         )
         self.norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.post_init()
@@ -247,7 +247,7 @@ class BirdMAE2Model(BirdMAE2PreTrainedModel):
 
         Args:
             input_values: ``(batch, 1, num_mel_bins, num_frames)`` spectrogram,
-                as returned by :class:`BirdMAE2FeatureExtractor`.
+                as returned by :class:`XenoMAEFeatureExtractor`.
             output_hidden_states: Also return every block's output. These are the
                 *raw* block outputs, before the final shared norm, because that
                 norm is specialised for the last layer — which is why the
@@ -280,7 +280,7 @@ class BirdMAE2Model(BirdMAE2PreTrainedModel):
         )
 
 
-class BirdMAE2PrototypicalHead(nn.Module):
+class XenoMAEPrototypicalHead(nn.Module):
     """Cosine-prototype classifier over a spatial feature map.
 
     Each class owns ``config.num_prototypes`` prototype vectors and reads only
@@ -294,7 +294,7 @@ class BirdMAE2PrototypicalHead(nn.Module):
     prototypes' activations.
     """
 
-    def __init__(self, config: BirdMAE2Config) -> None:
+    def __init__(self, config: XenoMAEConfig) -> None:
         """Build the prototype bank and the per-class mixing weights."""
         super().__init__()
         self.num_classes = config.num_labels
@@ -346,7 +346,7 @@ class BirdMAE2PrototypicalHead(nn.Module):
         return (pooled * self.class_weight).sum(-1) + self.class_bias
 
 
-class BirdMAE2ForAudioClassification(BirdMAE2PreTrainedModel):
+class XenoMAEForAudioClassification(XenoMAEPreTrainedModel):
     """Encoder plus the layerwise-fused prototypical head.
 
     The head reads a learned softmax-weighted sum of all 12 block outputs rather
@@ -360,10 +360,10 @@ class BirdMAE2ForAudioClassification(BirdMAE2PreTrainedModel):
     independent per class and ``labels`` are scored with binary cross-entropy.
     """
 
-    def __init__(self, config: BirdMAE2Config) -> None:
+    def __init__(self, config: XenoMAEConfig) -> None:
         """Build the encoder, the per-block norms, the fusion weights and the head."""
         super().__init__(config)
-        self.encoder = BirdMAE2Model(config)
+        self.encoder = XenoMAEModel(config)
         self.layer_weights = nn.Parameter(torch.zeros(config.num_hidden_layers))
         self.layer_norms = nn.ModuleList(
             [
@@ -371,7 +371,7 @@ class BirdMAE2ForAudioClassification(BirdMAE2PreTrainedModel):
                 for _ in range(config.num_hidden_layers)
             ]
         )
-        self.head = BirdMAE2PrototypicalHead(config)
+        self.head = XenoMAEPrototypicalHead(config)
         self.post_init()
 
     def forward(
@@ -425,7 +425,7 @@ class BirdMAE2ForAudioClassification(BirdMAE2PreTrainedModel):
 
 
 __all__ = [
-    "BirdMAE2ForAudioClassification",
-    "BirdMAE2Model",
-    "BirdMAE2PreTrainedModel",
+    "XenoMAEForAudioClassification",
+    "XenoMAEModel",
+    "XenoMAEPreTrainedModel",
 ]

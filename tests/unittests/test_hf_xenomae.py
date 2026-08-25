@@ -24,7 +24,7 @@ env has 2.6, so ``transformers.PreTrainedModel`` is unimportable here and every
 test below skips. Run them with the override this repo already uses for its other
 transformers-version conflicts::
 
-    uv run --with "transformers==4.57.1" pytest tests/unittests/test_hf_birdmae2.py
+    uv run --with "transformers==4.57.1" pytest tests/unittests/test_hf_xenomae.py
 """
 
 import numpy as np
@@ -39,10 +39,10 @@ except ImportError as exc:  # pragma: no cover - environment-dependent
 from soundscape_ssl.data.transforms.padding import BatchPadding  # noqa: E402
 from soundscape_ssl.data.transforms.spectrogram import BatchSpectrogram  # noqa: E402
 from soundscape_ssl.hf import (  # noqa: E402
-    BirdMAE2Config,
-    BirdMAE2FeatureExtractor,
-    BirdMAE2ForAudioClassification,
-    BirdMAE2Model,
+    XenoMAEConfig,
+    XenoMAEFeatureExtractor,
+    XenoMAEForAudioClassification,
+    XenoMAEModel,
 )
 from soundscape_ssl.hf.conversion import classifier_state_dict, encoder_state_dict  # noqa: E402
 from soundscape_ssl.models import ViTEncoder, ViTProtoLayerwise  # noqa: E402
@@ -67,9 +67,9 @@ HEAD = dict(num_classes=5, num_prototypes=3, mixer="block_diagonal", proto_chunk
 
 
 @pytest.fixture
-def config() -> BirdMAE2Config:
+def config() -> XenoMAEConfig:
     """The published config matching :data:`GEOMETRY` and :data:`HEAD`."""
-    return BirdMAE2Config(
+    return XenoMAEConfig(
         num_mel_bins=GEOMETRY["img_size"][0],
         num_frames=GEOMETRY["img_size"][1],
         patch_size=GEOMETRY["patch_size"],
@@ -86,17 +86,17 @@ def config() -> BirdMAE2Config:
 
 
 @pytest.fixture
-def spectrogram(config: BirdMAE2Config) -> torch.Tensor:
+def spectrogram(config: XenoMAEConfig) -> torch.Tensor:
     """A fixed batch of two spectrograms shaped like the front-end's output."""
     torch.manual_seed(0)
     return torch.randn(2, 1, config.num_mel_bins, config.num_frames)
 
 
-def test_encoder_reproduces_repo_encoder(config: BirdMAE2Config, spectrogram: torch.Tensor) -> None:
+def test_encoder_reproduces_repo_encoder(config: XenoMAEConfig, spectrogram: torch.Tensor) -> None:
     """The published encoder is bit-exact against ``ViTEncoder``."""
     torch.manual_seed(1)
     reference = ViTEncoder(**GEOMETRY).eval()
-    published = BirdMAE2Model(config).eval()
+    published = XenoMAEModel(config).eval()
     published.load_state_dict(encoder_state_dict(reference.state_dict()), strict=True)
 
     with torch.no_grad():
@@ -108,7 +108,7 @@ def test_encoder_reproduces_repo_encoder(config: BirdMAE2Config, spectrogram: to
 
 
 def test_encoder_hidden_states_are_the_pre_norm_block_outputs(
-    config: BirdMAE2Config, spectrogram: torch.Tensor
+    config: XenoMAEConfig, spectrogram: torch.Tensor
 ) -> None:
     """``output_hidden_states`` returns what the layerwise head consumes.
 
@@ -118,7 +118,7 @@ def test_encoder_hidden_states_are_the_pre_norm_block_outputs(
     """
     torch.manual_seed(1)
     reference = ViTEncoder(**GEOMETRY).eval()
-    published = BirdMAE2Model(config).eval()
+    published = XenoMAEModel(config).eval()
     published.load_state_dict(encoder_state_dict(reference.state_dict()), strict=True)
 
     with torch.no_grad():
@@ -131,11 +131,11 @@ def test_encoder_hidden_states_are_the_pre_norm_block_outputs(
         assert torch.equal(published_h, reference_h), f"block {block} differs"
 
 
-def test_classifier_reproduces_repo_classifier(config: BirdMAE2Config, spectrogram: torch.Tensor) -> None:
+def test_classifier_reproduces_repo_classifier(config: XenoMAEConfig, spectrogram: torch.Tensor) -> None:
     """The published classifier is bit-exact against ``ViTProtoLayerwise``."""
     torch.manual_seed(2)
     reference = ViTProtoLayerwise(**HEAD, layer_norm=True, **GEOMETRY).eval()
-    published = BirdMAE2ForAudioClassification(config).eval()
+    published = XenoMAEForAudioClassification(config).eval()
     published.load_state_dict(classifier_state_dict(reference.state_dict()), strict=True)
 
     with torch.no_grad():
@@ -146,13 +146,13 @@ def test_classifier_reproduces_repo_classifier(config: BirdMAE2Config, spectrogr
 
 
 def test_auto_classes_round_trip(
-    tmp_path, config: BirdMAE2Config, spectrogram: torch.Tensor
+    tmp_path, config: XenoMAEConfig, spectrogram: torch.Tensor
 ) -> None:
     """A saved artifact reloads through ``AutoModel`` with identical outputs."""
     from transformers import AutoModel, AutoModelForAudioClassification
 
     torch.manual_seed(3)
-    classifier = BirdMAE2ForAudioClassification(config).eval()
+    classifier = XenoMAEForAudioClassification(config).eval()
     classifier.save_pretrained(tmp_path)
 
     reloaded = AutoModelForAudioClassification.from_pretrained(tmp_path).eval()
@@ -179,7 +179,7 @@ def test_feature_extractor_matches_training_front_end() -> None:
     where they part company, which is the point of
     :func:`test_feature_extractor_is_batch_independent`.
     """
-    extractor = BirdMAE2FeatureExtractor()
+    extractor = XenoMAEFeatureExtractor()
     torch.manual_seed(4)
     waveform = torch.randn(int(extractor.sampling_rate * extractor.clip_seconds))
     # PeakNormalize precedes BatchSpectrogram in the training pipeline, and the
@@ -198,7 +198,7 @@ def test_feature_extractor_matches_training_front_end() -> None:
 
 def test_feature_extractor_pads_and_truncates_to_the_trained_window() -> None:
     """Clips shorter or longer than 5 s come out at the trained input shape."""
-    extractor = BirdMAE2FeatureExtractor()
+    extractor = XenoMAEFeatureExtractor()
     torch.manual_seed(5)
     clip_samples = int(extractor.sampling_rate * extractor.clip_seconds)
 
@@ -224,7 +224,7 @@ def test_feature_extractor_is_batch_independent() -> None:
     This is the one deliberate divergence from the training front-end, whose
     ``top_db`` clamp is taken against the batch maximum.
     """
-    extractor = BirdMAE2FeatureExtractor()
+    extractor = XenoMAEFeatureExtractor()
     torch.manual_seed(6)
     clip_samples = int(extractor.sampling_rate * extractor.clip_seconds)
     quiet = torch.randn(clip_samples) * 1e-3
@@ -242,6 +242,6 @@ def test_feature_extractor_is_batch_independent() -> None:
 
 def test_feature_extractor_rejects_a_wrong_sampling_rate() -> None:
     """A mismatched sampling rate is an error, not a silent resample."""
-    extractor = BirdMAE2FeatureExtractor()
+    extractor = XenoMAEFeatureExtractor()
     with pytest.raises(ValueError, match="sampling rate"):
         extractor(torch.zeros(16_000), sampling_rate=16_000)

@@ -1,12 +1,12 @@
-"""The published HuggingFace model code for the BirdMAE2 release.
+"""The published HuggingFace model code for the XenoMAE release.
 
 Three modules are copied verbatim into the HuggingFace model repo, and import
 nothing from this package so they work with no more than ``torch``,
 ``torchaudio`` and ``transformers`` installed:
 
-* ``configuration_birdmae2`` — the config,
-* ``modeling_birdmae2`` — the encoder and the classification head,
-* ``feature_extraction_birdmae2`` — the mel front-end.
+* ``configuration_xenomae`` — the config,
+* ``modeling_xenomae`` — the encoder and the classification head,
+* ``feature_extraction_xenomae`` — the mel front-end.
 
 ``conversion`` stays behind: it maps training checkpoints onto the published
 state dicts and is only ever run by ``scripts/export_hf_model.py``.
@@ -34,12 +34,12 @@ from transformers import (
     AutoModelForAudioClassification,
 )
 
-from .configuration_birdmae2 import BirdMAE2Config
-from .feature_extraction_birdmae2 import BirdMAE2FeatureExtractor
-from .modeling_birdmae2 import (
-    BirdMAE2ForAudioClassification,
-    BirdMAE2Model,
-    BirdMAE2PreTrainedModel,
+from .configuration_xenomae import XenoMAEConfig
+from .feature_extraction_xenomae import XenoMAEFeatureExtractor
+from .modeling_xenomae import (
+    XenoMAEForAudioClassification,
+    XenoMAEModel,
+    XenoMAEPreTrainedModel,
 )
 
 
@@ -51,12 +51,12 @@ def register_auto_classes() -> None:
     them once already.
     """
     try:
-        AutoConfig.register(BirdMAE2Config.model_type, BirdMAE2Config)
-        AutoModel.register(BirdMAE2Config, BirdMAE2Model)
+        AutoConfig.register(XenoMAEConfig.model_type, XenoMAEConfig)
+        AutoModel.register(XenoMAEConfig, XenoMAEModel)
         AutoModelForAudioClassification.register(
-            BirdMAE2Config, BirdMAE2ForAudioClassification
+            XenoMAEConfig, XenoMAEForAudioClassification
         )
-        AutoFeatureExtractor.register(BirdMAE2Config, BirdMAE2FeatureExtractor)
+        AutoFeatureExtractor.register(XenoMAEConfig, XenoMAEFeatureExtractor)
     except ValueError:
         pass
 
@@ -64,10 +64,10 @@ def register_auto_classes() -> None:
 register_auto_classes()
 
 __all__ = [
-    "BirdMAE2Config",
-    "BirdMAE2FeatureExtractor",
-    "BirdMAE2ForAudioClassification",
-    "BirdMAE2Model",
-    "BirdMAE2PreTrainedModel",
+    "XenoMAEConfig",
+    "XenoMAEFeatureExtractor",
+    "XenoMAEForAudioClassification",
+    "XenoMAEModel",
+    "XenoMAEPreTrainedModel",
     "register_auto_classes",
 ]
