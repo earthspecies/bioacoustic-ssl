@@ -11,8 +11,10 @@ from .utils import (
     LongTailUpsampleTargetConfig,
     MultiLabelFromFeature,
     MultiLabelFromFeatureConfig,
+    apply_logit_mask,
     class_ids_from_parquet,
     compute_sample_weights,
+    logit_mask,
 )
 
 __all__ = [
@@ -29,6 +31,8 @@ __all__ = [
     "Cast",
     "LongTailUpsampleTarget",
     "LongTailUpsampleTargetConfig",
+    "apply_logit_mask",
     "class_ids_from_parquet",
     "compute_sample_weights",
+    "logit_mask",
 ]

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import torch
 import torch.nn.functional as F
-import torchaudio
 import torchaudio.transforms as T
 from torchaudio.compliance import kaldi
 
@@ -161,17 +160,19 @@ class BatchSpectrogram(Transform):
         return batch
 
     def _compute(self, audio: torch.Tensor) -> torch.Tensor:
-        if audio.ndim == 2 and audio.shape[0] == 1:
-            audio = audio.squeeze(0)
+        if audio.ndim == 3 and audio.shape[1] == 1:
+            audio = audio.squeeze(1)  # (B, 1, T) -> (B, T)
 
-        spec = self._mel_spectrogram(audio)  # (freq, time)
+        # Channel axis before the dB step: ``AmplitudeToDB`` reads its reduction
+        # axes off the rank, so a 3-D (B, n_mels, frames) input would floor
+        # ``top_db`` below the *batch* maximum and make a clip's spectrogram
+        # depend on what it was batched with. 4-D floors it per sample.
+        spec = self._mel_spectrogram(audio).unsqueeze(1)  # (B, 1, freq, time)
 
         if self._to_db is not None:
             # normalize between [-1, 1]
             spec = self._to_db(spec)
             spec = 2 * (spec + self.top_db) / self.top_db - 1
-
-        spec = spec.unsqueeze(1)  # (B, 1, freq, time)
 
         return spec
 
@@ -404,130 +405,6 @@ class BatchMinMaxSpectrogram(Transform):
         flat = (flat - min_) / (max_ - min_ + self.eps)
 
         return flat.reshape(spec.shape)
-
-
-class BatchPupuMel(Transform):
-    """HiFi-GAN-style log-mel front-end, as PupuJEPA was pretrained with.
-
-    Ports ``_log_mel`` from PupuJEPA's ``embed.py`` verbatim. It is not
-    expressible via :class:`BatchSpectrogram` / ``torchaudio.MelSpectrogram``,
-    for three reasons that all shift the numbers:
-
-    * **Magnitude, not power** (``power=1``) — the STFT magnitude is mel-filtered
-      before any squaring.
-    * **Reflect padding of ``(n_fft - hop_length) / 2 = 392`` with
-      ``center=False``**, where ``torchaudio``'s ``center=True`` would pad
-      ``n_fft // 2 = 512``. That is a different frame grid, not a different
-      convention, so frames would not line up with pretraining.
-    * **Slaney-normalised mel basis and a natural-log floor** at ``1e-5``,
-      rather than ``AmplitudeToDB``'s ``top_db`` clamp.
-
-    A convenient consequence of the padding arithmetic: with ``center=False`` the
-    frame count is exactly ``num_samples / hop_length``, so 5 s at 24 kHz gives
-    exactly 500 frames and a ``(125, 8)`` token grid with **no padding and no
-    cropping** — PupuJEPA's RoPE is generated per input grid, so unlike the
-    fixed-table arms there is no ``target_length`` to pad to.
-
-    Like ``kaldi.fbank`` this is **not** scale invariant — a gain change shifts
-    every value by a constant — and ``mean``/``std`` default to the constants
-    PupuJEPA fitted on its own pretraining corpus. Configs using this transform
-    must therefore drop ``PeakNormalize``, as the Bird-MAE arm does.
-
-    Output keeps this repo's ``(B, 1, n_mels, frames)`` layout so the downstream
-    spectrogram stages (``SpecAugment``, padding) keep masking the axes they were
-    configured for. PupuJEPA patch-embeds the transpose of that (upstream's
-    ``flip_ft``), so :class:`TransposeSpec` must be the final stage of the
-    pipeline.
-
-    Args:
-        sample_rate: Sample rate of the incoming waveform, which must already be
-            resampled to what the model expects (24 kHz for PupuJEPA).
-        n_fft, hop_length, win_length, n_mels, f_min, f_max: mel front-end
-            settings. The defaults are PupuJEPA's ``args.json`` ``preprocess``
-            block.
-        mean: Global log-mel mean of the model's pretraining corpus.
-        std: Global log-mel standard deviation. Normalisation is
-            ``(x - mean) / (std + eps)``, as in the reference implementation.
-        eps: Added to the normalisation denominator, matching upstream.
-        clamp_min: Floor applied before the natural log.
-        mag_eps: Added inside the magnitude ``sqrt``, matching upstream.
-        audio_key: Key in the batch dict holding the waveform.
-        output_key: Key the spectrogram is written to.
-        drop_audio: Delete ``audio_key`` after computing the spectrogram.
-    """
-
-    def __init__(
-        self,
-        sample_rate: int = 24000,
-        n_fft: int = 1024,
-        hop_length: int = 240,
-        win_length: int = 1024,
-        n_mels: int = 128,
-        f_min: float = 0.0,
-        f_max: float = 12000.0,
-        mean: float = -4.089994845986366,
-        std: float = 2.0242277159094813,
-        eps: float = 1e-8,
-        clamp_min: float = 1e-5,
-        mag_eps: float = 1e-9,
-        audio_key: str = "audio",
-        output_key: str = "spectrogram",
-        drop_audio: bool = True,
-    ) -> None:
-        super().__init__()
-        self.n_fft = n_fft
-        self.hop_length = hop_length
-        self.win_length = win_length
-        self.mean = mean
-        self.std = std
-        self.eps = eps
-        self.clamp_min = clamp_min
-        self.mag_eps = mag_eps
-        self.audio_key = audio_key
-        self.output_key = output_key
-        self.drop_audio = drop_audio
-
-        # Same basis upstream builds with ``librosa.filters.mel`` (slaney norm,
-        # slaney scale). Built once here rather than lazily per device: these
-        # transforms run in CPU dataloader workers.
-        self._mel_basis = torchaudio.functional.melscale_fbanks(
-            n_freqs=n_fft // 2 + 1,
-            f_min=f_min,
-            f_max=f_max,
-            n_mels=n_mels,
-            sample_rate=sample_rate,
-            norm="slaney",
-            mel_scale="slaney",
-        ).T  # (n_mels, n_freqs)
-        self._window = torch.hann_window(win_length)
-
-    def __call__(self, batch: dict) -> dict:
-        batch[self.output_key] = self._compute(batch[self.audio_key])
-        if self.drop_audio:
-            del batch[self.audio_key]
-        return batch
-
-    def _compute(self, audio: torch.Tensor) -> torch.Tensor:
-        if audio.ndim == 3 and audio.shape[1] == 1:
-            audio = audio.squeeze(1)  # (B, 1, T) -> (B, T)
-
-        pad = (self.n_fft - self.hop_length) // 2
-        audio = F.pad(audio.unsqueeze(1), (pad, pad), mode="reflect").squeeze(1)
-
-        spec = torch.stft(
-            audio,
-            self.n_fft,
-            hop_length=self.hop_length,
-            win_length=self.win_length,
-            window=self._window.to(audio.device),
-            center=False,
-            return_complex=True,
-        )
-        spec = torch.sqrt(torch.view_as_real(spec).pow(2).sum(-1) + self.mag_eps)
-        spec = torch.log(torch.clamp(self._mel_basis.to(audio.device) @ spec, min=self.clamp_min))
-        spec = (spec - self.mean) / (self.std + self.eps)
-
-        return spec.unsqueeze(1)  # (B, 1, n_mels, frames)
 
 
 class TransposeSpec(Transform):

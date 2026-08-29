@@ -8,17 +8,14 @@ Research code for a single question:
 
 The pipeline is: MAE-pretrain a ViT-B/16 on 5 s @ 32 kHz mel spectrograms from a
 weighted mix of corpora, then probe the frozen encoder on **BirdSet** (8 tasks)
-and **BEANS** (6 tasks) against published baselines (Bird-MAE-Base, AudioMAE, BAT,
-PupuJEPA).
+and **BEANS** (6 tasks) against published baselines (Bird-MAE-Base, AudioMAE, BAT).
 
 **Metric of record:** BirdSet cmAP, test-set mean over 7 tasks (POW = validation,
 always excluded).
 
 ## Where things stand
 
-Numbers live in **[`EXPERIMENTS.md`](EXPERIMENTS.md)** (authoritative run ledger);
-the plan lives in **[`docs/research_overview.md`](docs/research_overview.md)** and
-**[`ROADMAP.md`](ROADMAP.md)**. Short version as of 2026-08:
+Short version as of 2026-08:
 
 | Backbone | BirdSet layerwise cmAP (test mean, 7 tasks) |
 |---|---|
@@ -35,8 +32,7 @@ the plan lives in **[`docs/research_overview.md`](docs/research_overview.md)** a
 - **NASA soundscapes are null on BirdSet** — sign flips with schedule, magnitude
   at the noise floor — and mildly *diluting* along the step curve.
 - The only positive PAM signal is a small single-seed cross-domain gain on BEANS
-  (+0.006 mean, 3/5 up), which still lacks its matched layerwise XC-only control
-  (GATE 0 in `docs/research_overview.md` §5).
+  (+0.006 mean, 3/5 up), which still lacks its matched layerwise XC-only control.
 
 ## Layout
 
@@ -47,7 +43,7 @@ src/soundscape_ssl/     library (installed package)
     transforms/         audio + batched-spectrogram transform pipeline
     iterable_dataset.py MixedStreamingDataset — weighted infinite mix of map-style datasets
   models/
-    architectures/      mae, vit (encoder/decoder/classifier/proto heads), bat, pupujepa
+    architectures/      mae, vit (encoder/decoder/classifier/proto heads), bat
     components/         attention, block, mlp, patch_embed, pos_embed
   training/
     mae_pretrainer.py   Fabric pretraining loop
@@ -57,9 +53,8 @@ src/soundscape_ssl/     library (installed package)
 configs/                Hydra config tree (see "Configuration")
 scripts/                entry points + one-off curation / probe / verification scripts
 scripts/slurm/          sbatch wrappers, incl. sweeps/{proto,layerwise,linear,finetune}/
-docs/                   research_overview.md, external_baselines.md, agents/
 notebooks/              result aggregation (birdset_results*.ipynb, beans_results.ipynb)
-metadata/               NASA granule metadata (parquet + csv)
+metadata/               NASA granule metadata parquets (tracked; source CSVs are not)
 curated/                curated NASA event/region indices and materialized audio
 tests/                  consistency (docstrings), unittests, integration
 ```
@@ -156,8 +151,6 @@ External baselines load **bit-exactly into our own `ViTEncoder`** — no wrapper
 uv run python scripts/convert_external_ckpt.py audiomae   # or birdmae
 ```
 
-See [`docs/external_baselines.md`](docs/external_baselines.md).
-
 ## Data sources
 
 `src/soundscape_ssl/data/datasets/`, wired up via `configs/data/datasets/`:
@@ -176,18 +169,14 @@ NASA splits (`NASAEarthAccess(split=...)`), all sharing one loader:
 
 - `BIOSCAPE` / `S2L` — full granules, streamed from the ORNL DAAC over HTTP range reads.
 - `*_EVENTS` — one row per ≥0.7 AudioProtoPNet detection, fetched over the network.
-- `*_EVENTS_LOCAL`, `*_RANDOM`, `*_PEAK`, `*_REGIONS` — materialized locally as flat
-  `.bin` + parquet index and read via `np.memmap`. The three selection arms
-  (random / energy-peak / model-confidence) differ **only** in the offset-selection
-  rule and share the format and the loader.
+- `*_EVENTS_LOCAL`, `*_REGIONS` — materialized locally as flat `.bin` + parquet
+  index and read via `np.memmap`.
 
 Materialization / curation scripts:
 
 | Script | Purpose |
 |---|---|
 | `curate_nasa.py` | model-confidence arm — AudioProtoPNet-20-BirdSet-XCL scores 5 s windows |
-| `curate_nasa_peak.py` | energy-peak arm (mel-wavelet activity detector) |
-| `curate_nasa_random.py` | random arm — the matched-N no-curation baseline |
 | `materialize_nasa_events.py` | download + decode the 5 s event slices to local shards |
 | `materialize_nasa_regions.py` | store contiguous 10–60 s regions instead (fresh crop per access) |
 
@@ -203,7 +192,7 @@ data/
   pretrain.yaml | train.yaml       datasets + transforms + loaders
   datasets/pretrain/*              one file per pretraining corpus/split
   datasets/train/{birdset,beans}/  one file per downstream task
-  transforms/                      pretrain, audiomae, birdmae, bat, pupujepa, ...
+  transforms/                      pretrain, audiomae, birdmae, bat, ...
   loaders/                         default, pretrain, a100 (batch size / workers)
 module/
   mae.yaml | vit.yaml              optimizer + scheduler + loss + metrics
@@ -249,10 +238,7 @@ uv run ruff check . && uv run ruff format --check .
 ```
 
 `pre-commit install` once; CI (`.github/workflows/ci.yml`) runs the same checks
-plus `deptry`. `tests/`, `scripts/` and `docs/hooks` are excluded from ruff. The
+plus `deptry`. `tests/` and `scripts/` are excluded from ruff. The
 example template tests (`tests/integration/test_VanilaNN.py`,
 `tests/unittests/test_linear.py`) are still the inherited placeholders — the
 library itself has no unit tests yet.
-
-Agent conventions (issue tracker under `.scratch/`, triage labels, domain docs)
-are documented in `docs/agents/` and referenced from `CLAUDE.md`.

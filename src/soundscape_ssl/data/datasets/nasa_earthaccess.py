@@ -20,7 +20,8 @@ granule per file, e.g. ``s2lam081_230605_2023-06-05_12-30.WAV``); the first few
 granules are a site-photos ``.zip`` and a sites ``.csv``.
 
 :meth:`~NASAEarthAccess._load` reads one flat record per granule from a
-precomputed metadata CSV per split (under ``metadata/``).  Non-audio granules
+precomputed metadata parquet per split (``metadata/nasa_bioscape.parquet`` /
+``metadata/nasa_s2l.parquet``, both shipped with the repo).  Non-audio granules
 (site-photo ``.zip``, sites ``.csv``) are always dropped.  With
 ``decode_audio=True`` (the default), :meth:`~NASAEarthAccess._process` then
 downloads and decodes the full WAV for each granule (resampling to
@@ -55,7 +56,8 @@ from alp_data.io import audio_stereo_to_mono
 
 logger = logging.getLogger(__name__)
 
-#: Directory holding the precomputed per-collection metadata CSVs (repo root).
+#: Directory holding the precomputed per-collection metadata parquets
+#: (repo root); they are tracked in git and ship with the repo.
 _METADATA_DIR = Path(__file__).resolve().parents[4] / "metadata"
 
 #: Directory holding the curated 5 s detection parquets (one subdir per split).
@@ -81,10 +83,6 @@ _SPLIT_PATHS = {
     "S2L_EVENTS": str(_CURATED_DIR / "s2l07.parquet"),
     "BIOSCAPE_EVENTS_LOCAL": str(_MATERIALIZED_DIR / "BIOSCAPE_EVENTS"),
     "S2L_EVENTS_LOCAL": str(_MATERIALIZED_DIR / "S2L_EVENTS"),
-    "BIOSCAPE_RANDOM": str(_MATERIALIZED_DIR / "BIOSCAPE_RANDOM"),
-    "S2L_RANDOM": str(_MATERIALIZED_DIR / "S2L_RANDOM"),
-    "BIOSCAPE_PEAK": str(_MATERIALIZED_DIR / "BIOSCAPE_PEAK"),
-    "S2L_PEAK": str(_MATERIALIZED_DIR / "S2L_PEAK"),
     "BIOSCAPE_REGIONS": str(_MATERIALIZED_DIR / "BIOSCAPE_REGIONS"),
     "S2L_REGIONS": str(_MATERIALIZED_DIR / "S2L_REGIONS"),
 }
@@ -94,18 +92,15 @@ _SPLIT_PATHS = {
 _EVENT_SPLITS = {"BIOSCAPE_EVENTS", "S2L_EVENTS"}
 
 #: Splits whose audio was pre-downloaded + resampled to local parquet shards by
-#: scripts/materialize_nasa_events.py (``*_EVENTS_LOCAL``), the §2.1 random arm
-#: scripts/curate_nasa_random.py (``*_RANDOM``), the §2.1 energy-peak arm
-#: scripts/curate_nasa_peak.py (``*_PEAK``), or scripts/materialize_nasa_regions.py
-#: (``*_REGIONS``).  Read locally: no network, no login.
+#: scripts/materialize_nasa_events.py (``*_EVENTS_LOCAL``) or
+#: scripts/materialize_nasa_regions.py (``*_REGIONS``).  Read locally: no
+#: network, no login.
 #:
 #: ``*_REGIONS`` rows are variable length (a 10-60 s merged detection region)
 #: rather than a fixed 5 s slice, and are meant to be read with
 #: ``random_crop_seconds`` set so each access draws a different window.
 _MATERIALIZED_SPLITS = {
     "BIOSCAPE_EVENTS_LOCAL", "S2L_EVENTS_LOCAL",
-    "BIOSCAPE_RANDOM", "S2L_RANDOM",
-    "BIOSCAPE_PEAK", "S2L_PEAK",
     "BIOSCAPE_REGIONS", "S2L_REGIONS",
 }
 
@@ -439,9 +434,9 @@ class NASAEarthAccess(Dataset):
             meta = pd.read_parquet(shard)
             if "audio_offset" not in meta.columns:
                 raise RuntimeError(
-                    f"Shard {shard} is in the old audio-in-parquet format. Run "
-                    "scripts/convert_nasa_shards.py to migrate it to the flat "
-                    ".bin layout (no re-download needed)."
+                    f"Shard {shard} is in the old audio-in-parquet format. "
+                    "Re-materialize it with scripts/materialize_nasa_regions.py "
+                    "(or materialize_nasa_events.py) to get the flat .bin layout."
                 )
             if not Path(self._shard_bin_paths[shard_idx]).exists():
                 raise FileNotFoundError(

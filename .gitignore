@@ -12,7 +12,6 @@ pip-wheel-metadata/
 .ipynb_checkpoints
 .mypy_cache/
 .vscode/
-.github
 
 # PyTorch
 runs/
@@ -29,6 +28,28 @@ saved_models/
 # Logs
 logs/
 *.log
+
+# Editors / agent tooling
+.idea/
+.claude/
+.scratch/
+CLAUDE.md
+CONTEXT.md
+docs/
+
+scripts/curate_nasa_peak.py
+scripts/curate_nasa_random.py
+scripts/slurm/curate_nasa_peak_a100.sh
+scripts/slurm/curate_nasa_random_a100.sh
+scripts/birdset_masked_eval.py
+scripts/export_results_cache.py
+
+configs/experiment/xc_classifier/birdset_masked.yaml
+scripts/slurm/xc_classifier/birdset_masked_h100.sh
+scripts/slurm/xc_classifier/vit_layerwise_capacity_h100.sh
+
+metadata/*.csv
+curated/
 
 # OS
 .DS_Store

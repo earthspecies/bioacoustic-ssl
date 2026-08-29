@@ -316,6 +316,48 @@ def class_ids_from_parquet(
     return pl.read_parquet(file, columns=[column])[column].to_list()
 
 
+def logit_mask(xc_classes: str, class_ids: list[int]) -> tuple["torch.Tensor", int]:
+    """Head-output index for each of a task's label indices.
+
+    The head's output index for a class is the rank of its gbifID in ascending
+    order — :class:`MultiLabelFromFeature` builds its map as
+    ``sorted(set(class_ids))`` — so the head's label space is reconstructed from
+    the frozen parquet the training config read, and never from the checkpoint.
+
+    Returns the index vector (``-1`` where the task species has no head output
+    at all: 3 BirdSet species have no Xeno-Canto recording, 1 in PER and 2 in
+    UHH) and the head's total output width.
+    """
+    import torch
+
+    head_ids = sorted(set(class_ids_from_parquet(xc_classes)))
+    head_index = {cid: i for i, cid in enumerate(head_ids)}
+    mask = torch.tensor([head_index.get(cid, -1) for cid in class_ids], dtype=torch.long)
+    return mask, len(head_ids)
+
+
+def apply_logit_mask(logits: "torch.Tensor", mask: "torch.Tensor", fill: float) -> "torch.Tensor":
+    """Select a task's columns out of a full-label-space logit vector.
+
+    Column selection, not score modification: a class's logit is untouched, so
+    every per-class ranking metric (average precision, AUROC) is identical to
+    what the unmasked head would give for that class. What masking changes is
+    which classes the macro average runs over — the task's, rather than the full
+    head's — and any metric that ranks classes against each other, i.e. top-k
+    accuracy. Under the block-diagonal mixer this is exact in a stronger sense
+    too: a class's logit reads only its own prototypes, so dropping columns
+    cannot change the ones that remain.
+
+    Task species with no head output are filled with a constant, which puts them
+    at their chance floor (AUROC 0.5, AP ~ the class's positive rate) rather than
+    dropping them, so the class set matches the per-task probes'.
+    """
+    preds = logits[:, mask.clamp(min=0)]
+    if (mask < 0).any():
+        preds[:, mask < 0] = fill
+    return preds
+
+
 def compute_sample_weights(
     dataset: Any,
     label_column: str = "label",
