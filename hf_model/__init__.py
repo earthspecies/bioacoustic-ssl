@@ -14,7 +14,7 @@ state dicts and is only ever run by ``scripts/export_hf_model.py``.
 Importing this package registers the classes with the ``Auto*`` factories, so a
 locally-exported artifact loads without ``trust_remote_code``::
 
-    import soundscape_ssl.hf  # noqa: F401
+    import hf_model  # noqa: F401
     model = AutoModel.from_pretrained("artifacts/base")
 
 Loading straight from the Hub needs no import — the published ``config.json``

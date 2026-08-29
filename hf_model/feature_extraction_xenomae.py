@@ -14,15 +14,15 @@ The chain, which is ``soundscape_ssl.data.transforms`` at inference time:
    ``2 * (dB + 80) / 80 - 1``;
 5. pad or truncate to (128 mels, 512 frames).
 
-**One deliberate divergence.** ``torchaudio``'s ``AmplitudeToDB`` takes its
+**A note on the dB floor.** ``torchaudio``'s ``AmplitudeToDB`` takes its
 ``top_db`` floor relative to the maximum of the tensor it is handed, and picks
-the reduction axes from the rank: the training pipeline handed it a 3-D
-``(batch, mels, frames)`` tensor, so the floor was the maximum of the whole
-*batch*. That makes a clip's spectrogram depend on what else was in its batch,
-which is defensible in a dataloader and indefensible in a released
-preprocessor, so the channel axis is added before the dB step here and the floor
-is per sample. At batch size 1 the two are identical, and reproducing a
-published number exactly means scoring one clip at a time.
+the reduction axes from the rank: hand it a 3-D ``(batch, mels, frames)`` tensor
+and the floor is the maximum of the whole *batch*, which makes a clip's
+spectrogram depend on what else was in its batch. This extractor adds the
+channel axis before the dB step, so its floor is per sample; the training
+pipeline (``BatchSpectrogram``) does the same now, but the released weights were
+pretrained before that fix, under the batch-max floor. The two agree at batch
+size 1 and differ only in near-silent bins otherwise.
 
 Longer recordings are truncated to the 5 s window, not windowed: the encoder has
 a fixed 512-frame position table. Window them yourself and batch the windows.
@@ -196,7 +196,7 @@ class XenoMAEFeatureExtractor(SequenceFeatureExtractor):
 
         # The channel axis goes on before the dB step, and that is what makes the
         # top_db floor per sample rather than per batch — see the module
-        # docstring; it is the one place this diverges from training.
+        # docstring.
         spectrogram = _amplitude_to_db(self.top_db)(spectrogram)
         spectrogram = 2 * (spectrogram + self.top_db) / self.top_db - 1
 

@@ -6,7 +6,7 @@ function per artifact rather than a dict comprehension buried in a script, and
 so the released geometry is stated once.
 
 The mapping is deliberately trivial. Every module in
-:mod:`soundscape_ssl.hf.modeling_xenomae` carries the name its
+:mod:`hf_model.modeling_xenomae` carries the name its
 training-time counterpart carries, so converting a checkpoint moves prefixes
 around and touches no tensor. That is the property worth having: a conversion
 that reshapes or renames weights is a conversion that can silently be wrong.
