@@ -54,7 +54,11 @@ def param_groups_lrd(
             as well as the
             layerwise-fusion params of :class:`ViTProtoLayerwise`
             (``layer_weights``, ``layer_norms.*``). The layer-decay / ``base_lr``
-            groups are then left with genuine backbone params only. Leave as
+            groups are then left with genuine backbone params only. The head is
+            split into ``head_decay`` / ``head_no_decay`` on the same rule the
+            backbone uses (1-dim params exempt), plus ``prototype_vectors``,
+            which is L2-normalised on every forward and so cannot be affected
+            by decay except through its optimisation dynamics. Leave as
             ``None`` (default) for standard :class:`ViTClassifier` usage.
         layer_weights_lr: When set (requires ``prototype_lr``), the layerwise
             softmax-fusion weights (``layer_weights`` of
@@ -145,14 +149,30 @@ def param_groups_lrd(
             p for n, p in model.named_parameters()
             if p.requires_grad and _in_head(n)
         ]
-        if head_params:
-            param_group_names["head"] = {
+        # Same decay convention as the backbone groups above: 1-dim params are
+        # exempt. `prototype_vectors` is exempt too — it is L2-normalised on
+        # every forward, so decaying it cannot change the loss, it only shrinks
+        # the norm and inflates the effective step on the direction.
+        def _head_decays(name: str, param: nn.Parameter) -> bool:
+            return param.ndim > 1 and "prototype_vectors" not in name
+
+        for suffix, decays in (("decay", True), ("no_decay", False)):
+            sel = [
+                (n, p) for n, p in zip(head_names, head_params)
+                if _head_decays(n, p) is decays
+            ]
+            if not sel:
+                continue
+            this_decay = weight_decay if decays else 0.0
+            param_group_names[f"head_{suffix}"] = {
                 "lr": prototype_lr,
-                "params": head_names,
+                "weight_decay": this_decay,
+                "params": [n for n, _ in sel],
             }
-            param_groups["head"] = {
+            param_groups[f"head_{suffix}"] = {
                 "lr": prototype_lr,
-                "params": head_params,
+                "weight_decay": this_decay,
+                "params": [p for _, p in sel],
             }
 
         if split_lw:
@@ -165,12 +185,15 @@ def param_groups_lrd(
                 if p.requires_grad and _is_layer_weights(n)
             ]
             if lw_params:
+                # 12-dim fusion softmax: 1-dim, so no decay.
                 param_group_names["layer_weights"] = {
                     "lr": layer_weights_lr,
+                    "weight_decay": 0.0,
                     "params": lw_names,
                 }
                 param_groups["layer_weights"] = {
                     "lr": layer_weights_lr,
+                    "weight_decay": 0.0,
                     "params": lw_params,
                 }
 

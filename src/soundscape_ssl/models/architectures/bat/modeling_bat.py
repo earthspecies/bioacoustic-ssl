@@ -21,7 +21,6 @@ so do not reformat, rename or tidy it. Every deviation is marked ``# VENDOR:``:
 BAT must never be converted into ``ViTEncoder`` (its gated attention and
 post-norm residual structure would be silently dropped, giving a plausible bad
 number), so it is deliberately absent from ``scripts/convert_external_ckpt.py``.
-See ``.scratch/bat-baseline/spec.md``.
 """
 
 # ruff: noqa

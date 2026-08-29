@@ -50,8 +50,6 @@ cd ~/soundscape_mae
 
 mkdir -p logs
 
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-
 uv sync
 
 srun uv run python scripts/birdset_eval.py --multirun \

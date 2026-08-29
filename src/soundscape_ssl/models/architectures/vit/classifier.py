@@ -228,6 +228,16 @@ class ViTProtoLayerwise(ViTProtoFloat):
             block's output before the weighted sum, so layers with different
             activation scales are comparable. Set ``False`` to weight the raw
             block outputs directly.
+        fusion_layers: Restrict the fusion to the LAST ``k`` blocks instead of
+            all of them. ``None`` (default) fuses every block, the published
+            behaviour. Set it when a long run would otherwise let the softmax
+            drift onto early blocks: at 100 k steps the full-XC head moved from
+            centroid 8.50 to 7.20 and w(blocks 1-4) from 0.198 to 0.351 while
+            downstream cmAP stayed flat and top-1 fell 0.014, whereas every
+            per-task probe (which stops after 2.5-7.5 k steps) puts 0.55-0.88 of
+            its mass on blocks 9-12. Restricting the pool removes the early
+            attractor instead of steering around it, and blocks 5-7 — dead in
+            every head measured — go with it.
         **encoder_kwargs: All keyword arguments forwarded to :class:`ViTEncoder`.
     """
 
@@ -237,6 +247,7 @@ class ViTProtoLayerwise(ViTProtoFloat):
         head_drop: float = 0.0,
         num_prototypes: int = 20,
         layer_norm: bool = True,
+        fusion_layers: int | None = None,
         mixer: str = "dense",
         proto_chunk: int | None = None,
         **encoder_kwargs,
@@ -250,9 +261,16 @@ class ViTProtoLayerwise(ViTProtoFloat):
             **encoder_kwargs,
         )
 
-        self.num_layers: int = encoder_kwargs.get("depth", 12)
-        # One learnable scalar per block, softmax-normalised at forward time.
-        # Init at zeros → uniform softmax → equal-weight average to start.
+        self.depth: int = encoder_kwargs.get("depth", 12)
+        if fusion_layers is not None and not 1 <= fusion_layers <= self.depth:
+            raise ValueError(
+                f"fusion_layers must be in [1, depth={self.depth}], got {fusion_layers}"
+            )
+        # Number of blocks the fusion ranges over — the last `fusion_layers` of
+        # them, or all of them when unset.
+        self.num_layers: int = fusion_layers or self.depth
+        # One learnable scalar per fused block, softmax-normalised at forward
+        # time. Init at zeros → uniform softmax → equal-weight average to start.
         self.layer_weights = nn.Parameter(torch.zeros(self.num_layers))
 
         if layer_norm:
@@ -262,6 +280,18 @@ class ViTProtoLayerwise(ViTProtoFloat):
             ])
         else:
             self.layer_norms = None
+
+    @property
+    def fusion_blocks(self) -> list[int]:
+        """1-based encoder-block index of each entry in ``layer_weights``.
+
+        The identity ``[1..depth]`` unless ``fusion_layers`` restricted the
+        fusion, in which case the weights refer to the LAST ``num_layers``
+        blocks and every readout of them — logs, centroid, the notebooks — has
+        to be offset by this, or a run that fuses blocks 8-12 is reported as one
+        that fuses blocks 1-5.
+        """
+        return list(range(self.depth - self.num_layers + 1, self.depth + 1))
 
     def freeze_backbone(self, freeze: bool = True) -> None:
         """Freeze the encoder, keeping the head AND the layerwise-fusion params
@@ -288,6 +318,10 @@ class ViTProtoLayerwise(ViTProtoFloat):
         # Per-block hidden states, each (B, N+1, D), before the encoder's norm.
         hidden: list[torch.Tensor] = ViTEncoder.forward(self, x, return_hidden=True)
         B = hidden[0].shape[0]
+
+        # Keep only the blocks the fusion ranges over. A no-op when
+        # `fusion_layers` is unset, since `num_layers` is then the full depth.
+        hidden = hidden[-self.num_layers:]
 
         if self.layer_norms is not None:
             hidden = [ln(h) for ln, h in zip(self.layer_norms, hidden)]

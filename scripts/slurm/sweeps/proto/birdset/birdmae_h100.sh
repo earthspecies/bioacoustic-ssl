@@ -10,7 +10,7 @@
 
 # Prototypical probing of the published Bird-MAE-Base encoder across the 8
 # BirdSet downstream tasks. Converts the HF weights once here, then fans the
-# per-dataset GPU jobs out via submitit. See docs/external_baselines.md.
+# per-dataset GPU jobs out via submitit.
 
 set -eo pipefail
 

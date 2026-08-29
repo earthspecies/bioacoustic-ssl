@@ -10,7 +10,7 @@
 
 # Frozen prototypical probing of the published BAT ViT-B/16 (AudioSet-2M) encoder
 # across the 8 BirdSet downstream tasks. Fans the per-dataset GPU jobs out via
-# submitit. See docs/external_baselines.md §7.
+# submitit.
 #
 #   sbatch scripts/slurm/sweeps/proto/birdset/bat_h100.sh
 #   sbatch scripts/slurm/sweeps/proto/birdset/bat_h100.sh seed=2
