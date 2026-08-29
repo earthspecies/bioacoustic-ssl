@@ -3,6 +3,9 @@ devices: 1
 strategy: auto
 precision: bf16-mixed
 max_steps: ${data.datasets.max_steps}
+# Number of validation passes spread over the run. 0 disables validation
+# entirely -- for runs scored later against a saved checkpoint rather than
+# on-line (the full-XC classifier).
 validate_amount: 15
 grad_clip: 2.0
 log_every_n_steps: 1

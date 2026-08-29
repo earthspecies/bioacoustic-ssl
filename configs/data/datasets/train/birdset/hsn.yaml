@@ -1,4 +1,4 @@
-max_steps: 1250
+max_steps: 2500
 
 train:
   _target_: alp_data.DatasetConfig

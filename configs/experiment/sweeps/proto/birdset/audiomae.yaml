@@ -13,7 +13,7 @@
 #
 # The Bird-MAE paper's Audio-MAE row (HSNval 19.42 proto) fed it 32 kHz audio, so
 # it is not directly comparable — this arm uses AudioMAE's native 16 kHz
-# filterbank and should land above it. See docs/external_baselines.md.
+# filterbank and should land above it.
 
 defaults:
   - override /data: train

@@ -1,9 +1,0 @@
-# @package data.datasets.nasa_bioscape_peak
-
-_target_: soundscape_ssl.data.datasets.NASAEarthAccess
-split: BIOSCAPE_PEAK
-sample_rate: 32000
-n_records: -1
-output_take_and_give:
-  audio: audio
-  sample_rate: sample_rate

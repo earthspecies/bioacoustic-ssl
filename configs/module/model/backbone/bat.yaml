@@ -1,10 +1,10 @@
 # BAT ViT-B/16 (lrauch/BAT-vit-b16-pretrainedAS2M, AudioSet-2M, ICML 2026).
 #
-# Like PupuJEPA and unlike birdmae/audiomae, this is not a `ViTEncoder`: BAT has
-# gated attention, post-norm blocks, a pre-block LayerNorm and no final norm, so
-# it would load ~92 % of its weights into ours and silently drop the gates. It
+# Unlike birdmae/audiomae, this is not a `ViTEncoder`: BAT has gated attention,
+# post-norm blocks, a pre-block LayerNorm and no final norm, so it would load
+# ~92 % of its weights into ours and silently drop the gates. It
 # uses the vendored `BatModel` (`models/architectures/bat/`) and is deliberately
-# absent from `scripts/convert_external_ckpt.py`. See docs/external_baselines.md §7.
+# absent from `scripts/convert_external_ckpt.py`.
 #
 # Weights arrive at construction (`BatModel.from_pretrained`, `strict=True`), so
 # arms on this backbone need NO `trainer.resume_from_checkpoint` — set it to

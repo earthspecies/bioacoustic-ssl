@@ -1,8 +1,0 @@
-# @package data.datasets.arbimon
-
-_target_: soundscape_ssl.data.datasets.ArbimonDetections
-detections: [detections/arbimon_lqvkzhdi6q5n_detections.csv, detections/arbimon_oprrj21xmfhc_detections.csv, detections/arbimon_s08rizdwr4j3_detections.csv]
-# arbimon_j6acnaodcb6t_detections.csv currently broken because of epoch string
-sample_rate: 32000
-output_take_and_give:
-  audio: audio

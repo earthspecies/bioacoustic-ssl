@@ -7,8 +7,8 @@
 # **10.24 s window**: our 5 s clips give 501 frames, i.e. ~51 % zero padding and
 # 513 tokens. That asymmetry against every other arm's 5 s / 257 tokens is a
 # property of this baseline (BAT publishes no short-clip recipe and its own
-# truncation path slices pos_embed incoherently — see docs/external_baselines.md
-# §7) and must be stated wherever the comparison appears.
+# truncation path slices pos_embed incoherently) and must be stated wherever
+# the comparison appears.
 #
 # Two things are simpler here than for the birdmae/audiomae arms:
 #   * No fitted mean/std constants — min-max is per clip, so there is nothing to

@@ -44,6 +44,10 @@
 # restart from step 0 with a fresh head.
 
 defaults:
+  # The masked-validation task, composed under `val_masked.dataset` rather than
+  # replacing `data/datasets` (which is the XC train stream). Only its `test`
+  # entry is used; the group's `train` entry and `max_steps` are ignored.
+  - /data/datasets/train/birdset/pow@val_masked.dataset
   - override /data: train
   - override /data/datasets: train/xc_all
   - override /data/loaders: pretrain
@@ -56,6 +60,40 @@ defaults:
   - override /module/metrics: [map, auroc, t1]
 
 run_name: XCall-${trainer.resume_from_checkpoint}-${seed}-layerwise
+
+# On-line validation against BirdSet POW by logit masking — the stopping signal
+# this run did not have. `trainer.validate_amount: 0` stays 0: the XC
+# `validation` split is inside the `all` train split and only ~29 % of classes
+# have a positive in it, so it can neither be trusted nor compared to anything.
+# This scores what the head is actually judged on instead.
+#
+# POW because it is BirdSet's own validation split and is already excluded from
+# every published test-set mean, so selecting a checkpoint on it leaves the test
+# sets untouched. Cost is one inference pass over POW-test_5s per firing
+# (minutes), against 25-100 k training steps.
+#
+# `xc_classes` MUST be the label space the head trains on — the SAME file
+# `data/datasets/train/xc_all` reads, currently the v0.1.0 `all` rebuild from
+# cb93286 (10 799 classes). It is NOT the v0.2.0 file that
+# `xc_classifier/birdset_masked` names: that one is 11 737 wide and belongs to
+# the older heads trained before the rebuild. The builder refuses to start when
+# the width disagrees with `data.num_classes`, because a mask re-indexed against
+# the wrong label space reports plausible wrong numbers rather than failing —
+# and the two spaces differ in both directions, so a same-width mismatch would
+# not even be visible.
+#
+# DISABLED 2026-08-28: it crashed the run. Re-enable only once the failure is
+# understood — a validator that takes the training job down is worse than no
+# stopping signal, which is what the 100 k run already had. The offline route
+# still works unchanged: save checkpoints often and score them in a separate job.
+val_masked:
+  enabled: false
+  every_n_steps: 5000
+  xc_classes: metadata/xc_v0.1.0_all_classes.parquet
+  # Score for a task species the head has no output for; any constant works —
+  # it makes the class unrankable, which is the truth about it. Reported
+  # separately as `*_covered`, the macro over only the predictable classes.
+  uncovered_fill: -1.0e4
 
 hydra:
   sweeper:

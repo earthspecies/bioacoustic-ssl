@@ -13,7 +13,7 @@
 # 51.73, PER 20.72 / 31.38, NES 28.11 / 37.80, UHH 26.46 / 29.97, NBP 62.68 /
 # 69.50, SSW 22.69 / 37.74, SNE 22.16 / 29.96 (the paper lists two ViT-B/16
 # rows). Our proto head is a simplified cosine variant of their PPNet, so treat
-# these as a band, not a target. See docs/external_baselines.md.
+# these as a band, not a target.
 
 defaults:
   - override /data: train

@@ -15,8 +15,7 @@
 # — `strict=False` would report that and carry on, i.e. fail silently.
 #
 # Caveat for the comparison: this arm sees a 10.24 s window (513 tokens, ~51 % of
-# it zero padding) against every other arm's 5 s / 257 tokens. See
-# docs/external_baselines.md §7.
+# it zero padding) against every other arm's 5 s / 257 tokens.
 
 defaults:
   - override /data: train

@@ -34,3 +34,21 @@ mixer: block_diagonal
 proto_chunk: 4096
 
 layer_norm: true
+
+# Fuse only the LAST k blocks. `null` = all 12, the published behaviour.
+#
+# Set it for long runs. The fusion softmax has no regulariser and keeps moving
+# for as long as it is trained: over 100 k steps this head went from centroid
+# 8.50 to 7.20 and from 0.198 to 0.351 of its mass on blocks 1-4, while masked
+# BirdSet cmAP stayed flat and top-1 fell 0.014. Every per-task probe — which
+# stops after 2.5-7.5 k steps — instead puts 0.55-0.88 on blocks 9-12, and
+# blocks 5-7 are dead (w < 0.01) in all 16 of them AND in this head at every
+# checkpoint. Restricting the pool to 8-12 keeps ~81 % of the probes' mass and
+# removes the early attractor outright, so every reachable softmax outcome is a
+# sensible one; a lower `layer_weights_lr` or a late-biased init only steers
+# inside a pool that still contains the bad outcomes (and a too-cold LR freezes
+# near the uniform init, which resurrects the dead blocks at 1/12 each).
+#
+# Changing this changes the shape of `layer_weights` and `layer_norms`, so a
+# checkpoint trained at one value cannot be loaded at another.
+fusion_layers: null

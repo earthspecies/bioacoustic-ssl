@@ -3,7 +3,7 @@
 # Frozen prototypical probing of OUR OWN MAE checkpoints (final layer) across the
 # BirdSet downstream tasks. The reference protocol every other sweep under
 # sweeps/ is a single-factor variation of: sweeps/proto/birdset/{birdmae,
-# audiomae,bat,pupujepa} swap the backbone, sweeps/layerwise/ swaps the readout,
+# audiomae,bat} swap the backbone, sweeps/layerwise/ swaps the readout,
 # sweeps/linear/ swaps the head, sweeps/finetune/ unfreezes the encoder.
 
 defaults:

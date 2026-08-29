@@ -12,8 +12,8 @@
 #
 # Shared by the birdmae/audiomae arms, whose geometry is identical — they differ
 # only in their front-end (`data/transforms`) and their checkpoint, both pinned
-# per arm in the corresponding sweep. BAT and PupuJEPA are NOT here: they do not
-# load into `ViTEncoder` at all (see proto/bat.yaml / backbone/pupujepa.yaml).
+# per arm in the corresponding sweep. BAT is NOT here: it does not load into
+# `ViTEncoder` at all (see proto/bat.yaml).
 img_size: [512, 128]
 patch_size: 16
 in_chans: 1
