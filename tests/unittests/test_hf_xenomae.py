@@ -38,13 +38,13 @@ except ImportError as exc:  # pragma: no cover - environment-dependent
 
 from soundscape_ssl.data.transforms.padding import BatchPadding  # noqa: E402
 from soundscape_ssl.data.transforms.spectrogram import BatchSpectrogram  # noqa: E402
-from soundscape_ssl.hf import (  # noqa: E402
+from hf_model import (  # noqa: E402
     XenoMAEConfig,
     XenoMAEFeatureExtractor,
     XenoMAEForAudioClassification,
     XenoMAEModel,
 )
-from soundscape_ssl.hf.conversion import classifier_state_dict, encoder_state_dict  # noqa: E402
+from hf_model.conversion import classifier_state_dict, encoder_state_dict  # noqa: E402
 from soundscape_ssl.models import ViTEncoder, ViTProtoLayerwise  # noqa: E402
 
 # Tiny stand-in for the released geometry: a (2, 4) token grid instead of (8, 32),
