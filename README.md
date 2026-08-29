@@ -53,8 +53,10 @@ src/soundscape_ssl/     library (installed package)
 configs/                Hydra config tree (see "Configuration")
 scripts/                entry points + one-off curation / probe / verification scripts
 scripts/slurm/          sbatch wrappers, incl. sweeps/{proto,layerwise,linear,finetune}/
-notebooks/              result aggregation (birdset_results*.ipynb, beans_results.ipynb)
-metadata/               NASA granule metadata parquets (tracked; source CSVs are not)
+notebooks/              tutorial.ipynb (config -> data -> model walkthrough) + result
+                        aggregation (birdset_results*.ipynb, beans_results.ipynb)
+metadata/               NASA granule metadata, frozen label spaces, gbifID->species names
+                        (tracked; source CSVs are not)
 curated/                curated NASA event/region indices and materialized audio
 tests/                  consistency (docstrings), unittests, integration
 ```

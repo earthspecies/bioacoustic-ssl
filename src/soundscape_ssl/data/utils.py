@@ -316,6 +316,37 @@ def class_ids_from_parquet(
     return pl.read_parquet(file, columns=[column])[column].to_list()
 
 
+def species_names(
+    class_ids: list[int] | None = None,
+    path: str = "metadata/gbif_names.parquet",
+) -> dict[int, tuple[str | None, str | None]]:
+    """Class id to ``(scientific_name, common_name)``, from the frozen name table.
+
+    The one place a gbifID is turned into something readable, so a taxon cannot
+    be called two different things in two places. ``common_name`` is ``None``
+    where neither Xeno-Canto nor GBIF has an English name (436 insects and
+    amphibians), and it is not unique — 38 names are shared by two ids — so
+    display it, never key on it.
+
+    Parameters
+    ----------
+    class_ids :
+        Ids to look up, or ``None`` for the whole table. Ids the table does not
+        have are absent from the result rather than an error.
+    path :
+        The table written by ``scripts/build_gbif_names.py``. Relative paths
+        resolve against the repository root, as in
+        :func:`class_ids_from_parquet`.
+    """
+    file = Path(path)
+    if not file.is_absolute():
+        file = Path(__file__).resolve().parents[3] / path
+    table = pl.read_parquet(file, columns=["gbifID", "scientific_name", "common_name"])
+    if class_ids is not None:
+        table = table.filter(pl.col("gbifID").is_in(class_ids))
+    return {row[0]: (row[1], row[2]) for row in table.iter_rows()}
+
+
 def logit_mask(xc_classes: str, class_ids: list[int]) -> tuple["torch.Tensor", int]:
     """Head-output index for each of a task's label indices.
 

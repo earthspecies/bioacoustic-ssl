@@ -15,6 +15,7 @@ from .utils import (
     class_ids_from_parquet,
     compute_sample_weights,
     logit_mask,
+    species_names,
 )
 
 __all__ = [
@@ -35,4 +36,5 @@ __all__ = [
     "class_ids_from_parquet",
     "compute_sample_weights",
     "logit_mask",
+    "species_names",
 ]

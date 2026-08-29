@@ -20,10 +20,8 @@ dependencies = [
   "safetensors",
   "soundfile>=0.12.1",
   "tenacity>=9.1.4",
-  "timm>=1.0.20",
   "torch-audiomentations>=0.12.0",
   "tqdm>=4.0.0",
-  "transformers>=5.6.1",
   "wandb>=0.26.1",
   "ipykernel>=7.3.0",
 ]
@@ -41,21 +39,21 @@ dev = [
   "prek>=0.2.28",
   "pytest>=8.4.2",
   "ruff>=0.11.2",
-  "ty>=0.0.9", # TODO: decide if we want to keep this after experimenting
+  "ty>=0.0.9",
   "keyrings-google-artifactregistry-auth>=1.1.2",
   "yamllint>=1.37.1",
   "pytest-asyncio>=0.25.0",
 ]
 
 cpu = [
-  "torch>=2.2.0",
+  "torch>=2.11,<2.12",
   "torchaudio",
   "torchvision",
   "torchcodec"
 ]
 
 gpu = [
-  "torch>=2.2.0",
+  "torch>=2.11,<2.12",
   "torchaudio",
   "torchvision",
   "torchcodec"
@@ -81,8 +79,8 @@ conflicts = [
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
 [[tool.uv.index]]
@@ -94,19 +92,19 @@ explicit = true
 [tool.uv.sources]
 torch = [
   { index = "pytorch-cpu", group = "cpu" },
-  { index = "pytorch-cu124", group = "gpu", marker = "platform_system == 'Linux'" },
+  { index = "pytorch-cu126", group = "gpu", marker = "platform_system == 'Linux'" },
 ]
 torchaudio = [
   { index = "pytorch-cpu", group = "cpu" },
-  { index = "pytorch-cu124", group = "gpu", marker = "platform_system == 'Linux'" },
+  { index = "pytorch-cu126", group = "gpu", marker = "platform_system == 'Linux'" },
 ]
 torchvision = [
   { index = "pytorch-cpu", group = "cpu" },
-  { index = "pytorch-cu124", group = "gpu", marker = "platform_system == 'Linux'" },
+  { index = "pytorch-cu126", group = "gpu", marker = "platform_system == 'Linux'" },
 ]
 torchcodec = [
   { index = "pytorch-cpu", group = "cpu" },
-  { index = "pytorch-cu124", group = "gpu", marker = "platform_system == 'Linux'" },
+  { index = "pytorch-cu126", group = "gpu", marker = "platform_system == 'Linux'" },
 ]
 
 
