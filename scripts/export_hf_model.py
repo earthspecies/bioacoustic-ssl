@@ -67,7 +67,7 @@ from hf_model.conversion import (  # noqa: E402
     encoder_state_dict,
     reference_encoder_kwargs,
 )
-from soundscape_ssl.models import ViTEncoder, ViTProtoLayerwise  # noqa: E402
+from bioacoustic_ssl.models import ViTEncoder, ViTProtoLayerwise  # noqa: E402
 
 # Pointers into the copied modules, so `AutoModel.from_pretrained(..., trust_remote_code=True)`
 # resolves without this repository. Written into both config.json and

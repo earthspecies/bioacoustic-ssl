@@ -14,12 +14,12 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from soundscape_ssl.data import Compose, MixedStreamingDataset
-from soundscape_ssl.data.transforms.spectrogram import BatchSpectrogram
-from soundscape_ssl.models.architectures.mae import MAE
-from soundscape_ssl.models.utils.lr_decay import param_groups_lrd
-from soundscape_ssl.training.lr_scheduler import CosineWarmupScheduler
-from soundscape_ssl.training.repr_eval import (
+from bioacoustic_ssl.data import Compose, MixedStreamingDataset
+from bioacoustic_ssl.data.transforms.spectrogram import BatchSpectrogram
+from bioacoustic_ssl.models.architectures.mae import MAE
+from bioacoustic_ssl.models.utils.lr_decay import param_groups_lrd
+from bioacoustic_ssl.training.lr_scheduler import CosineWarmupScheduler
+from bioacoustic_ssl.training.repr_eval import (
     build_pow_eval,
     run_layerwise_eval,
 )

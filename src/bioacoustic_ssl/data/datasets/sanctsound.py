@@ -10,7 +10,7 @@ Each row of an animal, time-localised detector is one **detection event**
 timestamped in absolute UTC.  The actual loading — globbing the detection
 files, filtering to animal/localised events, resolving each event's UTC time
 against its deployment's 96 kHz audio listing, windowed GCS reads, resampling —
-lives in :class:`~soundscape_ssl.data.datasets.noaa.NOAA`, where SanctSound is
+lives in :class:`~bioacoustic_ssl.data.datasets.noaa.NOAA`, where SanctSound is
 registered as the ``SANCTSOUND`` split (see that module for the UTC
 time-bookkeeping and the animal/localised filtering details).
 
@@ -27,7 +27,7 @@ from .noaa import _SANCTSOUND_ROOT, NOAA
 class SanctSound(NOAA):
     """NOAA SanctSound animal detection events served as fixed-length clips.
 
-    Convenience wrapper over :class:`~soundscape_ssl.data.datasets.noaa.NOAA`
+    Convenience wrapper over :class:`~bioacoustic_ssl.data.datasets.noaa.NOAA`
     that fixes the split to SanctSound.  See :class:`NOAA` for the full
     parameter and return-value documentation; the only difference is that
     ``split`` defaults to (and is restricted to) the SanctSound subset.
@@ -40,7 +40,7 @@ class SanctSound(NOAA):
 
     Examples
     --------
-    >>> from soundscape_ssl.data.datasets import SanctSound
+    >>> from bioacoustic_ssl.data.datasets import SanctSound
     >>> ds = SanctSound(sample_rate=32_000)
     >>> item = ds[0]
     >>> item["audio"].shape, item["sample_rate"], item["label"]  # doctest: +SKIP

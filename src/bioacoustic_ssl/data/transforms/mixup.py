@@ -3,7 +3,7 @@ from typing import Literal
 import torch
 from torch.distributions import Beta, Binomial, Dirichlet
 
-from soundscape_ssl.data.transforms.base import Transform
+from bioacoustic_ssl.data.transforms.base import Transform
 
 
 def _fit_to_length(audio: torch.Tensor, length: int) -> torch.Tensor:

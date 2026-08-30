@@ -2,7 +2,7 @@
 # on ESP's self-hosted GKE runners. The self-hosted job is recommended if your
 # project needs access to Google Cloud (private pypi, GCS, etc.).
 
-# TODO (OSS): change soundscape_ssl to dir name of your own library
+# TODO (OSS): change bioacoustic_ssl to dir name of your own library
 
 name: CI
 
@@ -70,13 +70,13 @@ jobs:
           uv run deptry .
       - name: Consistency tests with pytest
         run: |
-          uv run pytest tests/consistency --base_folder soundscape_ssl
+          uv run pytest tests/consistency --base_folder bioacoustic_ssl
       - name: Unittests with pytest
         run: |
           uv run pytest tests/unittests
       - name: Doctests with pytest
         run: |
-          uv run pytest --doctest-modules soundscape_ssl
+          uv run pytest --doctest-modules bioacoustic_ssl
       - name: Integration tests with pytest
         run: |
           uv run pytest tests/integration
@@ -117,13 +117,13 @@ jobs:
           uv run deptry .
       - name: Consistency tests with pytest
         run: |
-          uv run pytest tests/consistency --base_folder soundscape_ssl
+          uv run pytest tests/consistency --base_folder bioacoustic_ssl
       - name: Unittests with pytest
         run: |
           uv run pytest tests/unittests
       - name: Doctests with pytest
         run: |
-          uv run pytest --doctest-modules soundscape_ssl
+          uv run pytest --doctest-modules bioacoustic_ssl
       - name: Integration tests with pytest
         run: |
           uv run pytest tests/integration

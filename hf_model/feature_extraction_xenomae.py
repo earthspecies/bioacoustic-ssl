@@ -5,7 +5,7 @@ and ``transformers``: the released spectrogram is ``torchaudio``'s
 ``MelSpectrogram`` and ``AmplitudeToDB``, and calling them is the only way to
 guarantee the input matches pretraining to the last bit.
 
-The chain, which is ``soundscape_ssl.data.transforms`` at inference time:
+The chain, which is ``bioacoustic_ssl.data.transforms`` at inference time:
 
 1. peak-normalise the waveform to ``[-1, 1]``;
 2. pad or truncate it to a 5 s window at 32 kHz;

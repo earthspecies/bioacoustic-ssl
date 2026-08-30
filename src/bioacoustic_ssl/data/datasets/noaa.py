@@ -596,7 +596,7 @@ class NOAA(Dataset):
 
     Examples
     --------
-    >>> from soundscape_ssl.data.datasets import NOAA
+    >>> from bioacoustic_ssl.data.datasets import NOAA
     >>> ds = NOAA(split="PIFSC-10", sample_rate=10_000)
     >>> item = ds[0]
     >>> item["audio"].shape, item["sample_rate"], item["label"]  # doctest: +SKIP

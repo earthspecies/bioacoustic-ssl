@@ -23,27 +23,27 @@
 # arms; only the front-end differs.
 #
 # Pair with `module/model=proto/bat`.
-- _target_: soundscape_ssl.data.transforms.TimeShift
+- _target_: bioacoustic_ssl.data.transforms.TimeShift
   p: 1.0
   output_length: 5.0
   sample_rate: 32000
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.ToTensor
+- _target_: bioacoustic_ssl.data.transforms.ToTensor
   keys: [audio]
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+- _target_: bioacoustic_ssl.data.transforms.MultiHotEncoder
   num_classes: ${data.num_classes}
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.MeanMix
+- _target_: bioacoustic_ssl.data.transforms.MeanMix
   p: 0.9
   max_samples: 3
   label_key: label
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.RollingWindow
+- _target_: bioacoustic_ssl.data.transforms.RollingWindow
   p: 1.0
   _stage_: [train]
 # No-op for this arm (see header) — kept so the augmentation stack is shared.
-- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudiomentationsTransform
   transform:
     _target_: torch_audiomentations.Gain
     p: 0.6
@@ -52,12 +52,12 @@
     sample_rate: 32_000
     output_type: dict
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.padding.WavePadding
+- _target_: bioacoustic_ssl.data.transforms.padding.WavePadding
   _stage_: [train, test]
 - _target_: torch.utils.data.default_collate
   _partial_: true
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudioTransform
   transform:
     _target_: torchaudio.transforms.Resample
     orig_freq: 32000
@@ -66,7 +66,7 @@
   _stage_: [train, test]
 # Must run before padding: BAT min-maxes the unpadded clip, so the pad value 0
 # lands on the clip's own floor rather than mid-range.
-- _target_: soundscape_ssl.data.transforms.spectrogram.BatchMinMaxSpectrogram
+- _target_: bioacoustic_ssl.data.transforms.spectrogram.BatchMinMaxSpectrogram
   sample_rate: 16000
   n_fft: 1024
   hop_length: 160
@@ -82,7 +82,7 @@
 # the other arms, and (b) fill masks with `specgram.mean()`, which the padding
 # dilutes toward 0. Masking the 501 real frames keeps ~100/501 ≈ 20 % maximum
 # time coverage, matching the other arms' 100/512.
-- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudioTransform
   transform:
     _target_: torchaudio.transforms.SpecAugment
     n_time_masks: 1
@@ -91,10 +91,10 @@
     n_freq_masks: 1
     iid_masks: True
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.padding.BatchPadding
+- _target_: bioacoustic_ssl.data.transforms.padding.BatchPadding
   target_shape: [128, 1024]
   pad_value: 0.0
   _stage_: [train, test]
 # must stay last: BAT expects (B, 1, frames, n_mels)
-- _target_: soundscape_ssl.data.transforms.spectrogram.TransposeSpec
+- _target_: bioacoustic_ssl.data.transforms.spectrogram.TransposeSpec
   _stage_: [train, test]

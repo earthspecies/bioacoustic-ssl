@@ -2,7 +2,7 @@ from typing import Any
 
 import torch.nn as nn
 
-from soundscape_ssl.data.transforms.base import Transform
+from bioacoustic_ssl.data.transforms.base import Transform
 
 
 class TorchAudioTransform(Transform):

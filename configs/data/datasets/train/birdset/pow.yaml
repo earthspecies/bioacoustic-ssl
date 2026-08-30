@@ -10,23 +10,23 @@ train:
     audio_bytes: audio_bytes
     label: label
   transformations: 
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class: 
         _target_: polars.Int64
-    - _target_: soundscape_ssl.data.FilterFixConfig
+    - _target_: bioacoustic_ssl.data.FilterFixConfig
       type: filter_fix
       property: gbifID
       values: &cls [2491205, 2490872, 9606290, 2490384, 2487805, 2487887, 2489590, 6092631, 2490810, 2489613, 2484391, 2480328, 2482507, 2478106, 5232437, 2487456, 2482593, 2484597, 6093862, 2478259, 9409198, 2484892, 9192501, 2480529, 2482492, 6093586, 2488517, 2489985, 2490494, 2487430, 6093374, 2490821, 9581157, 9149595, 6093202, 2484340, 2484609, 6092942, 7531611, 6093846, 2489670, 2487596, 2493801, 9510564, 5228824, 2496287, 5229734, 2490804]
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class: 
         _target_: polars.List
         inner:
           _target_: polars.Int64
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID
@@ -41,7 +41,7 @@ test:
     audio: audio
     label: label
   transformations: 
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID_multispecies
       extract_all_regex: \d+
@@ -49,7 +49,7 @@ test:
         _target_: polars.List
         inner:
           _target_: polars.Int64
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID_multispecies

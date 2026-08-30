@@ -28,10 +28,10 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 
-from soundscape_ssl.data import Compose, apply_logit_mask, compute_sample_weights, logit_mask
-from soundscape_ssl.models import ViTClassifier, ViTProtoFloat
-from soundscape_ssl.models.utils.lr_decay import param_groups_lrd
-from soundscape_ssl.training.lr_scheduler import CosineWarmupScheduler
+from bioacoustic_ssl.data import Compose, apply_logit_mask, compute_sample_weights, logit_mask
+from bioacoustic_ssl.models import ViTClassifier, ViTProtoFloat
+from bioacoustic_ssl.models.utils.lr_decay import param_groups_lrd
+from bioacoustic_ssl.training.lr_scheduler import CosineWarmupScheduler
 
 log = logging.getLogger(__name__)
 

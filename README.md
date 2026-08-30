@@ -37,7 +37,7 @@ its matched layerwise XC-only control.
 ## What is in the repo
 
 ```
-src/soundscape_ssl/      the installed library
+src/bioacoustic_ssl/      the installed library
   data/datasets/         one module per corpus (table below)
   data/transforms/       audio and batched-spectrogram transforms
   data/iterable_dataset.py   MixedStreamingDataset, a weighted infinite mix of
@@ -213,7 +213,7 @@ The released model is **XenoMAE**, in two artifacts:
   masking needs.
 
 `hf_model/` holds three modules that get copied verbatim into the model repo and
-import nothing from `soundscape_ssl`: `configuration_xenomae`, `modeling_xenomae`
+import nothing from `bioacoustic_ssl`: `configuration_xenomae`, `modeling_xenomae`
 and `feature_extraction_xenomae`. `conversion.py` stays here, because nobody
 loading the weights needs it.
 
@@ -252,7 +252,7 @@ override, because AudioProtoPNet's remote code wants transformers 4.x.
 
 ## Data sources
 
-Modules in `src/soundscape_ssl/data/datasets/`, wired up through
+Modules in `src/bioacoustic_ssl/data/datasets/`, wired up through
 `configs/data/datasets/`:
 
 | Module | Corpus | Notes |

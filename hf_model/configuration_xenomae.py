@@ -2,7 +2,7 @@
 
 Ships inside the HuggingFace model repo, so it must stay importable with nothing
 but ``torch`` and ``transformers`` installed — it deliberately imports nothing
-from ``soundscape_ssl``.
+from ``bioacoustic_ssl``.
 
 The geometry defaults are the ones every released artifact was trained with
 (``configs/module/model/backbone/vit.yaml``): a ViT-B/16 over a

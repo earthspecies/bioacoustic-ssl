@@ -1,6 +1,6 @@
 # @package data.datasets.nasa_s2l
 
-_target_: soundscape_ssl.data.datasets.NASAEarthAccess
+_target_: bioacoustic_ssl.data.datasets.NASAEarthAccess
 split: S2L
 sample_rate: 32000
 n_records: -1

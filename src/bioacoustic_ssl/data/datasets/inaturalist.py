@@ -1,20 +1,17 @@
-"""AudioSet dataset variant for bytes-based audio loading."""
+"""iNaturalist dataset variant for bytes-based audio loading."""
 
-import json
 from typing import Any
 
-import numpy as np
-
 from alp_data import DatasetInfo, register_dataset
-from alp_data.datasets import AudioSet
-from alp_data.io import anypath, filesystem_from_path
+from alp_data.datasets import INaturalist
+from alp_data.io import DATA_HOME, anypath, filesystem_from_path
 
 
 @register_dataset
-class AudioSetRaw(AudioSet):
-    """AudioSet dataset that returns raw compressed bytes instead of decoded audio.
+class INaturalistRaw(INaturalist):
+    """iNaturalist dataset that returns raw compressed bytes instead of decoded audio.
 
-    Extends :class:`~alp_data.datasets.AudioSet` by skipping the decode step
+    Extends :class:`~alp_data.datasets.INaturalist` by skipping the decode step
     in :meth:`_process`.  Each sample contains::
 
         {
@@ -26,9 +23,9 @@ class AudioSetRaw(AudioSet):
 
     The ``"audio"`` key produced by the parent class is **never** present.
 
-    Like :class:`~soundscape_ssl.data.datasets.XenoCantoRaw`, the primary
+    Like :class:`~bioacoustic_ssl.data.datasets.XenoCantoRaw`, the primary
     use-case is to pair this dataset with a bytes-aware
-    :class:`~soundscape_ssl.data.transforms.TimeShift`, which decides the crop
+    :class:`~bioacoustic_ssl.data.transforms.TimeShift`, which decides the crop
     window *before* decoding so that only the required frames are ever decoded.
 
     .. note::
@@ -38,14 +35,14 @@ class AudioSetRaw(AudioSet):
     Parameters
     ----------
     *args :
-        Forwarded verbatim to :class:`~alp_data.datasets.AudioSet`.
+        Forwarded verbatim to :class:`~alp_data.datasets.INaturalist`.
     **kwargs :
-        Forwarded verbatim to :class:`~alp_data.datasets.AudioSet`.
+        Forwarded verbatim to :class:`~alp_data.datasets.INaturalist`.
 
     Examples
     --------
-    >>> from soundscape_ssl.data.datasets import AudioSetRaw
-    >>> ds = AudioSetRaw(split="train", version="0.2.0", sample_rate=32000)
+    >>> from bioacoustic_ssl.data.datasets import INaturalistRaw
+    >>> ds = INaturalistRaw(split="train", sample_rate=32000)
     >>> sample = ds[0]
     >>> isinstance(sample["audio_bytes"], bytes)
     True
@@ -54,13 +51,20 @@ class AudioSetRaw(AudioSet):
     """
 
     info = DatasetInfo(
-        name="audioset-raw",
-        owner="david; marius; masato",
-        split_paths={},  # populated per-version in AudioSet.__init__
+        name="inaturalist-raw",
+        owner="gagan; david",
+        split_paths={
+            "train": f"{DATA_HOME}/inaturalist/v0.1.0/raw/train_20260201_v3.csv",
+            "train_unseen": f"{DATA_HOME}/inaturalist/v0.1.0/raw/train_unseen_20260201_v3.csv",
+            "val": f"{DATA_HOME}/inaturalist/v0.1.0/raw/val_20260201_v3.csv",
+            "val_unseen": f"{DATA_HOME}/inaturalist/v0.1.0/raw/val_unseen_20260201_v3.csv",
+            "all": f"{DATA_HOME}/inaturalist/v0.1.0/raw/all_20260201_v3.csv",
+            "all_unseen": f"{DATA_HOME}/inaturalist/v0.1.0/raw/all_unseen_20260201_v3.csv",
+        },
         version="0.1.0",
-        description="AudioSet dataset returning raw compressed audio bytes (no decode).",
-        sources=["YouTube"],
-        license="CC BY 4.0",
+        description="iNaturalist audio dataset returning raw compressed audio bytes (no decode).",
+        sources=["iNaturalist"],
+        license="CC BY-NC 4.0, CC BY 4.0, CC0 1.0",
     )
 
     def _resolve_audio_path(self, row: dict[str, Any]):
@@ -82,15 +86,11 @@ class AudioSetRaw(AudioSet):
         """
         if self.sample_rate is not None and self.sample_rate in self._sample_rate_paths:
             path_column = self._sample_rate_paths[self.sample_rate]
-            if (
-                path_column in row
-                and row[path_column] not in (None, "")
-                and not (isinstance(row[path_column], float) and np.isnan(row[path_column]))
-            ):
-                return anypath(self.data_root) / str(row[path_column])
+            if path_column in row and row[path_column] is not None and row[path_column] != "":
+                return anypath(self.data_root) / row[path_column]
 
         # Fall back to original variable-rate files.
-        return anypath(self.data_root) / str(row[self._originals_path_column])
+        return anypath(self.data_root) / row[self._originals_path_column]
 
     def _process(self, row: dict[str, Any]) -> dict[str, Any]:
         """Load raw bytes without decoding.
@@ -107,16 +107,6 @@ class AudioSetRaw(AudioSet):
             ``"sample_rate"`` (target SR) added.  The ``"audio"`` key is
             never present.
         """
-        row = dict(row)  # shallow copy – do not mutate original
-
-        # Parse JSON-encoded labels if present (mirrors AudioSet._process).
-        if "labels" in row:
-            v = row["labels"]
-            if v is None or v == "" or (isinstance(v, float) and np.isnan(v)):
-                row["labels"] = []
-            elif isinstance(v, str):
-                row["labels"] = json.loads(v)
-
         audio_path = self._resolve_audio_path(row)
 
         fs = filesystem_from_path(audio_path)
@@ -125,6 +115,7 @@ class AudioSetRaw(AudioSet):
 
         audio_format: str = anypath(audio_path).suffix.lstrip(".").upper()
 
+        row = dict(row)  # shallow copy – do not mutate original
         row["audio_bytes"] = audio_bytes
         row["audio_format"] = audio_format
         row["sample_rate"] = self.sample_rate  # target SR; may be None

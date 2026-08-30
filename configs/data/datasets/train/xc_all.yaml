@@ -47,19 +47,19 @@ train:
     audio_bytes: audio_bytes
     label: label
   transformations:
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class:
         _target_: polars.List
         inner:
           _target_: polars.Int64
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID
       class_ids:
-        _target_: soundscape_ssl.data.class_ids_from_parquet
+        _target_: bioacoustic_ssl.data.class_ids_from_parquet
         path: ${paths.root_dir}/metadata/xc_v0.1.0_all_classes.parquet
 
 test:
@@ -74,7 +74,7 @@ test:
     audio_bytes: audio_bytes
     label: label
   transformations:
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class:
@@ -82,23 +82,23 @@ test:
     # A no-op while the train split is `all` (every validation class is in the
     # universe by construction), kept so the test side still drops rather than
     # null-labels a class the head has no output for if the splits change.
-    - _target_: soundscape_ssl.data.FilterFixConfig
+    - _target_: bioacoustic_ssl.data.FilterFixConfig
       type: filter_fix
       property: gbifID
       values:
-        _target_: soundscape_ssl.data.class_ids_from_parquet
+        _target_: bioacoustic_ssl.data.class_ids_from_parquet
         path: ${paths.root_dir}/metadata/xc_v0.1.0_all_classes.parquet
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class:
         _target_: polars.List
         inner:
           _target_: polars.Int64
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID
       class_ids:
-        _target_: soundscape_ssl.data.class_ids_from_parquet
+        _target_: bioacoustic_ssl.data.class_ids_from_parquet
         path: ${paths.root_dir}/metadata/xc_v0.1.0_all_classes.parquet

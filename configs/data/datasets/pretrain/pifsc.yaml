@@ -1,6 +1,6 @@
 # @package data.datasets.pifsc
 
-_target_: soundscape_ssl.data.datasets.noaa.NOAA
+_target_: bioacoustic_ssl.data.datasets.noaa.NOAA
 split: PIFSC-10
 sample_rate: 32000
 output_take_and_give:

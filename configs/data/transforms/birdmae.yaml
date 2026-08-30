@@ -10,33 +10,33 @@
 # min-value padding to 512 frames, (x + 7.2) / 8.86 normalisation, and a final
 # transpose to the (frames, n_mels) layout its patch embedding expects.
 # Pair with `module/model=proto/birdmae`.
-- _target_: soundscape_ssl.data.transforms.TimeShift
+- _target_: bioacoustic_ssl.data.transforms.TimeShift
   p: 1.0
   output_length: 5.0
   sample_rate: 32000
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.ToTensor
+- _target_: bioacoustic_ssl.data.transforms.ToTensor
   keys: [audio]
   _stage_: [train, test]
 # Calibration check on 512 clean XC-train clips (augmentations off): our raw
 # log-mel is -7.2975 / 4.3587 against Bird-MAE's fitted -7.20 / 4.43, so no peak
 # normalisation is the correctly calibrated choice here. Peak normalising would
 # land at ~-4.8, i.e. 2.4 nats too loud. Left commented for a sensitivity check.
-#- _target_: soundscape_ssl.data.transforms.PeakNormalize
+#- _target_: bioacoustic_ssl.data.transforms.PeakNormalize
 #  target_key: audio
 #  _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+- _target_: bioacoustic_ssl.data.transforms.MultiHotEncoder
   num_classes: ${data.num_classes}
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.MeanMix
+- _target_: bioacoustic_ssl.data.transforms.MeanMix
   p: 0.9
   max_samples: 3
   label_key: label
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.RollingWindow
+- _target_: bioacoustic_ssl.data.transforms.RollingWindow
   p: 1.0
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudiomentationsTransform
   transform:
     _target_: torch_audiomentations.Gain
     p: 0.6
@@ -45,12 +45,12 @@
     sample_rate: 32_000
     output_type: dict
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.padding.WavePadding
+- _target_: bioacoustic_ssl.data.transforms.padding.WavePadding
   _stage_: [train, test]
 - _target_: torch.utils.data.default_collate
   _partial_: true
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.spectrogram.BatchKaldiFbank
+- _target_: bioacoustic_ssl.data.transforms.spectrogram.BatchKaldiFbank
   sample_rate: 32000
   target_length: 512
   mean: -7.2
@@ -58,7 +58,7 @@
   pad_value: min
   _stage_: [train, test]
 # this combines time and freq masking
-- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudioTransform
   transform:
     _target_: torchaudio.transforms.SpecAugment
     n_time_masks: 1
@@ -68,5 +68,5 @@
     iid_masks: True
   _stage_: [train]
 # must stay last: Bird-MAE expects (B, 1, frames, n_mels)
-- _target_: soundscape_ssl.data.transforms.spectrogram.TransposeSpec
+- _target_: bioacoustic_ssl.data.transforms.spectrogram.TransposeSpec
   _stage_: [train, test]

@@ -29,8 +29,8 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torchmetrics.classification import MultilabelAUROC, MultilabelAveragePrecision
 
-from soundscape_ssl.data import Compose
-from soundscape_ssl.models.architectures.vit.encoder import ViTEncoder
+from bioacoustic_ssl.data import Compose
+from bioacoustic_ssl.models.architectures.vit.encoder import ViTEncoder
 
 KNN_K = 20
 

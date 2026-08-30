@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torchaudio.transforms as T
 from torchaudio.compliance import kaldi
 
-from soundscape_ssl.data.transforms.base import Transform
+from bioacoustic_ssl.data.transforms.base import Transform
 
 
 class Spectrogram(Transform):

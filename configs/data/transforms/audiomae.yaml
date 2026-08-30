@@ -15,32 +15,32 @@
 #
 # The waveform is resampled 32 kHz -> 16 kHz (AudioMAE's rate) after the 32 kHz
 # waveform augmentations. Pair with `module/model=proto/audiomae`.
-- _target_: soundscape_ssl.data.transforms.TimeShift
+- _target_: bioacoustic_ssl.data.transforms.TimeShift
   p: 1.0
   output_length: 5.0
   sample_rate: 32000
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.ToTensor
+- _target_: bioacoustic_ssl.data.transforms.ToTensor
   keys: [audio]
   _stage_: [train, test]
 # See the note in `birdmae.yaml`: faithful (no peak normalisation) by default,
 # at the cost of a level-driven train/test std mismatch. Uncomment to switch the
 # whole arm to level-matched input.
-#- _target_: soundscape_ssl.data.transforms.PeakNormalize
+#- _target_: bioacoustic_ssl.data.transforms.PeakNormalize
 #  target_key: audio
 #  _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+- _target_: bioacoustic_ssl.data.transforms.MultiHotEncoder
   num_classes: ${data.num_classes}
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.MeanMix
+- _target_: bioacoustic_ssl.data.transforms.MeanMix
   p: 0.9
   max_samples: 3
   label_key: label
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.RollingWindow
+- _target_: bioacoustic_ssl.data.transforms.RollingWindow
   p: 1.0
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudiomentationsTransform
   transform:
     _target_: torch_audiomentations.Gain
     p: 0.6
@@ -49,19 +49,19 @@
     sample_rate: 32_000
     output_type: dict
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.padding.WavePadding
+- _target_: bioacoustic_ssl.data.transforms.padding.WavePadding
   _stage_: [train, test]
 - _target_: torch.utils.data.default_collate
   _partial_: true
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudioTransform
   transform:
     _target_: torchaudio.transforms.Resample
     orig_freq: 32000
     new_freq: 16000
   audio_key: audio
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.spectrogram.BatchKaldiFbank
+- _target_: bioacoustic_ssl.data.transforms.spectrogram.BatchKaldiFbank
   sample_rate: 16000
   target_length: 512
   mean: -7.6314
@@ -69,7 +69,7 @@
   pad_value: 0.0
   _stage_: [train, test]
 # this combines time and freq masking
-- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudioTransform
   transform:
     _target_: torchaudio.transforms.SpecAugment
     n_time_masks: 1
@@ -79,5 +79,5 @@
     iid_masks: True
   _stage_: [train]
 # must stay last: AudioMAE expects (B, 1, frames, n_mels)
-- _target_: soundscape_ssl.data.transforms.spectrogram.TransposeSpec
+- _target_: bioacoustic_ssl.data.transforms.spectrogram.TransposeSpec
   _stage_: [train, test]

@@ -10,23 +10,23 @@ train:
     audio_bytes: audio_bytes
     label: label
   transformations: 
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class: 
         _target_: polars.Int64
-    - _target_: soundscape_ssl.data.FilterFixConfig
+    - _target_: bioacoustic_ssl.data.FilterFixConfig
       type: filter_fix
       property: gbifID
       values: &cls [9510564, 2490810, 2484591, 6092644, 2488484, 2490487, 2482492, 9709230, 8169649, 2490821, 2484879, 2487783, 9552291, 5232437, 7341805, 2482598, 7531611, 2487446, 9362842, 2476674, 2478259, 5789146, 6092651, 2494324, 2490849, 9629160, 7341770, 2478133, 2491872, 2495347, 7804446, 2484391, 2495266, 9722986, 9581157, 2478602, 9128444, 2491276, 2487825, 2474320, 5229743, 2482803, 5230861, 5231459, 5231132, 5229754, 2484597, 2493843, 7341606, 2492192, 5231635, 8255548, 2482800, 2491728, 5231640, 9568685]
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class: 
         _target_: polars.List
         inner:
           _target_: polars.Int64
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID
@@ -41,7 +41,7 @@ test:
     audio: audio
     label: label
   transformations: 
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID_multispecies
       extract_all_regex: \d+
@@ -53,13 +53,13 @@ test:
     # `gbifID_multispecies` -- the upstream BirdSet GBIF linkage failed for it, so its
     # test positives would be dropped and the class could never be scored. XC has
     # 251 recordings under gbifID 9568685, so it is trainable once restored.
-    - _target_: soundscape_ssl.data.AppendLabelWhereConfig
+    - _target_: bioacoustic_ssl.data.AppendLabelWhereConfig
       type: append_label_where
       property: gbifID_multispecies
       key_property: ebird_code_multilabel
       key: pasfly
       value: 9568685
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID_multispecies

@@ -5,7 +5,7 @@ defaults:
   - /module/model/backbone/vit_external@_here_
   - _self_
 
-_target_: soundscape_ssl.models.ViTProtoLayerwise
+_target_: bioacoustic_ssl.models.ViTProtoLayerwise
 
 # Classification head
 num_classes: ${data.num_classes}

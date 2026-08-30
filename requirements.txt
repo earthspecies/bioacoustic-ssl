@@ -16,7 +16,7 @@ aioitertools==0.13.0
 aiosignal==1.4.0
     # via aiohttp
 alp-data==1.11.0
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 annotated-doc==0.0.4
     # via typer
 annotated-types==0.7.0
@@ -83,7 +83,7 @@ cuda-toolkit==12.6.3 ; sys_platform == 'linux'
 cycler==0.12.1
     # via matplotlib
 datasets==5.0.0
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 debugpy==1.8.21
     # via ipykernel
 decorator==5.3.1
@@ -96,7 +96,7 @@ dill==0.4.1
     #   datasets
     #   multiprocess
 earthaccess==0.18.0
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 executing==2.2.1
     # via stack-data
 filelock==3.29.1
@@ -191,14 +191,14 @@ httpx==0.28.1
     #   huggingface-hub
 huggingface-hub==1.18.0
     # via
+    #   bioacoustic-ssl
     #   datasets
-    #   soundscape-ssl
 hydra-core==1.3.2
     # via
+    #   bioacoustic-ssl
     #   hydra-submitit-launcher
-    #   soundscape-ssl
 hydra-submitit-launcher==1.2.0
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 idna==3.18
     # via
     #   anyio
@@ -210,7 +210,7 @@ importlib-resources==7.1.0
 intervaltree==3.2.1
     # via alp-data
 ipykernel==7.3.0
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 ipython==9.15.0
     # via ipykernel
 ipython-pygments-lexers==1.1.1
@@ -242,7 +242,7 @@ lazy-loader==0.5
 librosa==0.11.0
     # via alp-data
 lightning==2.6.5
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 lightning-utilities==0.15.3
     # via
     #   lightning
@@ -255,7 +255,7 @@ markdown-it-py==4.2.0
 markupsafe==3.0.3
     # via jinja2
 matplotlib==3.10.9
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 matplotlib-inline==0.2.2
     # via
     #   ipykernel
@@ -448,7 +448,7 @@ python-dateutil==2.9.0.post0
     #   pandas
     #   python-cmr
 python-dotenv==1.2.2
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 pytorch-lightning==2.6.5
     # via lightning
 pyyaml==6.0.3
@@ -486,14 +486,14 @@ s3fs==2026.4.0
     #   alp-data
     #   earthaccess
 safetensors==0.7.0
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 scikit-learn==1.9.0
     # via librosa
 scipy==1.17.1
     # via
+    #   bioacoustic-ssl
     #   librosa
     #   scikit-learn
-    #   soundscape-ssl
 semver==3.0.4
     # via alp-data
 sentry-sdk==2.61.1
@@ -511,8 +511,8 @@ sortedcontainers==2.4.0
 soundfile==0.13.1
     # via
     #   alp-data
+    #   bioacoustic-ssl
     #   librosa
-    #   soundscape-ssl
 soxr==1.1.0
     # via librosa
 stack-data==0.6.3
@@ -533,8 +533,8 @@ sympy==1.14.0
     # via torch
 tenacity==9.1.4
     # via
+    #   bioacoustic-ssl
     #   earthaccess
-    #   soundscape-ssl
 threadpoolctl==3.6.0
     # via scikit-learn
 tinynetrc==1.3.1
@@ -558,7 +558,7 @@ torch==2.11.0+cu126 ; sys_platform == 'linux'
     #   torchmetrics
     #   torchvision
 torch-audiomentations==0.12.0
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 torch-pitch-shift==1.2.5
     # via torch-audiomentations
 torchaudio==2.11.0 ; sys_platform != 'linux'
@@ -583,12 +583,12 @@ tornado==6.5.7
     #   jupyter-client
 tqdm==4.68.0
     # via
+    #   bioacoustic-ssl
     #   datasets
     #   huggingface-hub
     #   lightning
     #   pqdm
     #   pytorch-lightning
-    #   soundscape-ssl
 traitlets==5.15.1
     # via
     #   ipykernel
@@ -631,7 +631,7 @@ urllib3==2.7.0
     #   requests
     #   sentry-sdk
 wandb==0.27.1
-    # via soundscape-ssl
+    # via bioacoustic-ssl
 wcwidth==0.8.2
     # via prompt-toolkit
 wrapt==2.2.1

@@ -1,26 +1,26 @@
-- _target_: soundscape_ssl.data.transforms.TimeShift
+- _target_: bioacoustic_ssl.data.transforms.TimeShift
   p: 1.0
   output_length: 5.0
   sample_rate: 32000
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.ToTensor
+- _target_: bioacoustic_ssl.data.transforms.ToTensor
   keys: [audio]
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.PeakNormalize
+- _target_: bioacoustic_ssl.data.transforms.PeakNormalize
   target_key: audio
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.MultiHotEncoder
+- _target_: bioacoustic_ssl.data.transforms.MultiHotEncoder
   num_classes: ${data.num_classes}
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.MeanMix
+- _target_: bioacoustic_ssl.data.transforms.MeanMix
   p: 0.9
   max_samples: 3
   label_key: label
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.RollingWindow
+- _target_: bioacoustic_ssl.data.transforms.RollingWindow
   p: 1.0
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudiomentationsTransform
   transform:
     _target_: torch_audiomentations.Gain
     p: 0.6
@@ -29,7 +29,7 @@
     sample_rate: 32_000
     output_type: dict
   _stage_: [train]
-#- _target_: soundscape_ssl.data.transforms.TorchAudiomentationsTransform
+#- _target_: bioacoustic_ssl.data.transforms.TorchAudiomentationsTransform
 #  transform:
 #    _target_: torch_audiomentations.AddColoredNoise
 #    p: 0.3
@@ -40,16 +40,16 @@
 #    sample_rate: 32_000
 #    output_type: dict
 #  _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.padding.WavePadding
+- _target_: bioacoustic_ssl.data.transforms.padding.WavePadding
   _stage_: [train, test]
 - _target_: torch.utils.data.default_collate
   _partial_: true
   _stage_: [train, test]
-- _target_: soundscape_ssl.data.transforms.spectrogram.BatchSpectrogram
+- _target_: bioacoustic_ssl.data.transforms.spectrogram.BatchSpectrogram
   sample_rate: 32000
   _stage_: [train, test]
 # this combines time and freq masking
-- _target_: soundscape_ssl.data.transforms.TorchAudioTransform
+- _target_: bioacoustic_ssl.data.transforms.TorchAudioTransform
   transform:
     _target_: torchaudio.transforms.SpecAugment
     n_time_masks: 1
@@ -58,6 +58,6 @@
     n_freq_masks: 1
     iid_masks: True
   _stage_: [train]
-- _target_: soundscape_ssl.data.transforms.padding.BatchPadding
+- _target_: bioacoustic_ssl.data.transforms.padding.BatchPadding
   target_shape: [128, 512]
   _stage_: [train, test]

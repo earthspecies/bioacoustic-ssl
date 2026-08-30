@@ -10,23 +10,23 @@ train:
     audio_bytes: audio_bytes
     label: label
   transformations: 
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class: 
         _target_: polars.Int64
-    - _target_: soundscape_ssl.data.FilterFixConfig
+    - _target_: bioacoustic_ssl.data.FilterFixConfig
       type: filter_fix
       property: gbifID
       values: &cls [2496811, 5229924, 2493744, 5229662, 2490801, 2497365, 2475311, 5231103, 2496060, 5844398, 5230928, 11081628, 9492770, 7341947, 2479901, 2490848, 2482565, 2489837, 2483936, 2478979, 5229460, 2482755, 2484222, 10755999, 7341190, 2476441, 2482559, 5231037, 2488439, 2482921, 2481066, 10913109, 10912964, 2478133, 5231459, 2488442, 2483274, 2490716, 2489785, 7341074, 2485628, 2487979, 2477507, 7341141, 2491171, 5229754, 2495303, 2486044, 2483410, 2496432, 2479105, 2484434, 5230942, 7646544, 2479618, 2487772, 2478105, 2479906, 6100745, 2487949, 7341834, 5229495, 5229450, 2483531, 2493214, 2488602, 2496990, 2484246, 2479122, 2482913, 5228831, 9476062, 2475466, 7341088, 2481071, 7415507, 2479563, 2486467, 2478771, 2480556, 2474659, 5230329, 5230705, 2487453, 10936179, 6100795, 5230896, 5229606, 5231482]
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class: 
         _target_: polars.List
         inner:
           _target_: polars.Int64
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID
@@ -41,7 +41,7 @@ test:
     audio: audio
     label: label
   transformations: 
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID_multispecies
       extract_all_regex: \d+
@@ -53,13 +53,13 @@ test:
     # `gbifID_multispecies` -- the upstream BirdSet GBIF linkage failed for it, so its
     # test positives would be dropped and the class could never be scored. XC has
     # 10 recordings under gbifID 5231482, so it is trainable once restored.
-    - _target_: soundscape_ssl.data.AppendLabelWhereConfig
+    - _target_: bioacoustic_ssl.data.AppendLabelWhereConfig
       type: append_label_where
       property: gbifID_multispecies
       key_property: ebird_code_multilabel
       key: runwre1
       value: 5231482
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID_multispecies

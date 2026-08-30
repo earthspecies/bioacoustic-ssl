@@ -1,7 +1,7 @@
 """The released XenoMAE encoder and its Xeno-Canto classification head.
 
 Ships inside the HuggingFace model repo, so it imports nothing from
-``soundscape_ssl``: ``torch`` and ``transformers`` are the whole dependency set.
+``bioacoustic_ssl``: ``torch`` and ``transformers`` are the whole dependency set.
 Two entry points:
 
 ``XenoMAEModel`` (``AutoModel``)
@@ -17,7 +17,7 @@ Two entry points:
     subset — ships beside the weights as ``xc_classes.parquet``.
 
 Every module here is a transcription of the training-time implementation
-(``soundscape_ssl.models.architectures.vit``), op for op and name for name, so
+(``bioacoustic_ssl.models.architectures.vit``), op for op and name for name, so
 that loading a converted checkpoint is a key rename rather than a
 re-implementation that happens to agree. ``tests/unittests/test_hf_xenomae.py``
 asserts the two agree bit-exactly, and ``scripts/export_hf_model.py`` re-asserts

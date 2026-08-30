@@ -8,7 +8,7 @@ import torch
 from alp_data.io.read_utils import get_audio_info, read_audio
 from soundfile import LibsndfileError
 
-from soundscape_ssl.data.transforms.base import Transform
+from bioacoustic_ssl.data.transforms.base import Transform
 
 
 class TimeShift(Transform):
@@ -25,12 +25,12 @@ class TimeShift(Transform):
     **Standard mode** (``"audio"`` key present)
         Crops an already-decoded :class:`torch.Tensor`.  No I/O.
 
-    **Bytes mode** (``"audio_bytes"`` key present, from :class:`~soundscape_ssl.data.datasets.XenoCantoRaw`)
+    **Bytes mode** (``"audio_bytes"`` key present, from :class:`~bioacoustic_ssl.data.datasets.XenoCantoRaw`)
         The crop window is decided *before* decoding.  Only the selected
         frames are decoded from the compressed stream (partial decode).
         The entire compressed file must already be in memory.
 
-    **Lazy / path mode** (``"audio_path"`` key present, from :class:`~soundscape_ssl.data.datasets.XenoCantoLazy`)
+    **Lazy / path mode** (``"audio_path"`` key present, from :class:`~bioacoustic_ssl.data.datasets.XenoCantoLazy`)
         The file is opened directly — local or remote (GCS / S3).  For remote
         files, ``gcsfs`` translates soundfile's ``seek()`` calls into HTTP
         ``Range`` requests, so *only the header bytes plus the selected window
@@ -127,7 +127,7 @@ class TimeShift(Transform):
 
         # anonymous=True: our GCS buckets are public, so skip the ambient
         # (expiring) credentials on the ffmpeg range-read path — see
-        # soundscape_ssl.data.datasets._gcs_anon.
+        # bioacoustic_ssl.data.datasets._gcs_anon.
         audio, sr = read_audio(
             audio_path, start_time=start_secs, end_time=start_secs + self.output_length, anonymous=True
         )

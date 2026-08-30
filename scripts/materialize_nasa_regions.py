@@ -41,7 +41,7 @@ Layout & compatibility
 Writes the same flat layout the loader already reads — a ``shard_*.bin`` blob of
 concatenated raw PCM beside a ``shard_*.parquet`` index whose rows carry
 ``num_samples`` / ``audio_offset`` / ``audio_dtype`` — so
-:class:`~soundscape_ssl.data.datasets.NASAEarthAccess` needs no new read path,
+:class:`~bioacoustic_ssl.data.datasets.NASAEarthAccess` needs no new read path,
 only the ``BIOSCAPE_REGIONS`` / ``S2L_REGIONS`` split names.  Rows are variable
 length here (10–60 s) where the event store was a fixed 5 s.
 
@@ -278,7 +278,7 @@ def main() -> None:
     bin_path = args.output.with_suffix(".bin")
     # Import here so --dry-run needs neither earthaccess nor credentials.
     import earthaccess
-    from soundscape_ssl.data.datasets.nasa_earthaccess import _ensure_login
+    from bioacoustic_ssl.data.datasets.nasa_earthaccess import _ensure_login
 
     _ensure_login()
     fs = earthaccess.get_fsspec_https_session()

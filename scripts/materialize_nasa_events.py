@@ -1,7 +1,7 @@
 """Materialize the NASA Earthdata 5 s event slices to local parquet shards.
 
 The ``BIOSCAPE_EVENTS`` / ``S2L_EVENTS`` splits of
-:class:`~soundscape_ssl.data.datasets.NASAEarthAccess` fetch each 5 s detection
+:class:`~bioacoustic_ssl.data.datasets.NASAEarthAccess` fetch each 5 s detection
 over the network at run time (~3.9 s/sample, HTTP-range read from Earthdata),
 which dominates data-loading wall time during pretraining. This script downloads
 and decodes every event once — resampled to 32 kHz mono — and writes the audio
@@ -43,7 +43,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from soundscape_ssl.data.datasets import NASAEarthAccess
+from bioacoustic_ssl.data.datasets import NASAEarthAccess
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("materialize_nasa")

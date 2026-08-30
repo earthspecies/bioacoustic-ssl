@@ -5,7 +5,7 @@ defaults:
   - /module/model/backbone/bat@_here_
   - _self_
 
-_target_: soundscape_ssl.models.BatProtoFloat
+_target_: bioacoustic_ssl.models.BatProtoFloat
 
 # Classification head — identical to the other proto arms, so the comparison is
 # about the backbone. The head applies our focal-similarity subtraction

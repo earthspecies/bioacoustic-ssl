@@ -1,7 +1,7 @@
 # @package data.datasets.nasa_s2l_regions
 
 # Materialized S2L detection *regions* — see nasa_bioscape_regions_local.yaml.
-_target_: soundscape_ssl.data.datasets.NASAEarthAccess
+_target_: bioacoustic_ssl.data.datasets.NASAEarthAccess
 split: S2L_REGIONS
 sample_rate: 32000
 n_records: -1

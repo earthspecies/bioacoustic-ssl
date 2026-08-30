@@ -1,7 +1,7 @@
 [project]
-name = "soundscape-ssl"
+name = "bioacoustic-ssl"
 version = "0.1.1"
-description = "Masked-autoencoder pretraining for bioacoustics: does unlabeled soundscape (PAM) audio improve a Xeno-Canto MAE backbone?"
+description = "Bioacoustic pretraining and evaluation on BirdSet and BEANS"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

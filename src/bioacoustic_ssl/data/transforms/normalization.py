@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from soundscape_ssl.data.transforms.base import Transform
+from bioacoustic_ssl.data.transforms.base import Transform
 
 
 class PeakNormalize(Transform):

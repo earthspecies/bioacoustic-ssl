@@ -7,7 +7,7 @@ Passive Bioacoustics archive ships a single annotation file at::
 
 Every row is one labelled **detection event** inside a long HARP ``xwav``
 (FLAC) recording.  The actual loading — in-file offset computation, lazy
-windowed GCS reads, resampling — lives in :class:`~soundscape_ssl.data.datasets.noaa.NOAA`,
+windowed GCS reads, resampling — lives in :class:`~bioacoustic_ssl.data.datasets.noaa.NOAA`,
 where PIFSC is registered as the ``PIFSC-10`` split (see that module for the
 subchunk time-bookkeeping details).
 
@@ -24,14 +24,14 @@ from .noaa import _GCS_ROOT, NOAA
 class PIFSC(NOAA):
     """NOAA PIFSC detection events served as fixed-length audio clips.
 
-    Convenience wrapper over :class:`~soundscape_ssl.data.datasets.noaa.NOAA`
+    Convenience wrapper over :class:`~bioacoustic_ssl.data.datasets.noaa.NOAA`
     that fixes the split to PIFSC.  See :class:`NOAA` for the full parameter
     and return-value documentation; the only difference is that ``split``
     defaults to (and is restricted to) the PIFSC subset.
 
     Examples
     --------
-    >>> from soundscape_ssl.data.datasets import PIFSC
+    >>> from bioacoustic_ssl.data.datasets import PIFSC
     >>> ds = PIFSC(sample_rate=10_000)
     >>> item = ds[0]
     >>> item["audio"].shape, item["sample_rate"], item["label"]  # doctest: +SKIP

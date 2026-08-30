@@ -25,7 +25,7 @@ import torch
 from lightning.fabric import Fabric
 from omegaconf import DictConfig, OmegaConf
 
-from soundscape_ssl.training.mae_pretrainer import pretrain
+from bioacoustic_ssl.training.mae_pretrainer import pretrain
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="pretrain")

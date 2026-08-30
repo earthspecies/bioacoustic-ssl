@@ -29,8 +29,8 @@ import torch
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 
-from soundscape_ssl.models import ViTEncoder
-from soundscape_ssl.models.components import get_2d_sincos_pos_embed
+from bioacoustic_ssl.models import ViTEncoder
+from bioacoustic_ssl.models.components import get_2d_sincos_pos_embed
 
 # name -> (HF repo, encoder img_size as (frames, n_mels), pos_embed grid to
 # rebuild as (n_mels // patch, frames // patch), or None to keep the

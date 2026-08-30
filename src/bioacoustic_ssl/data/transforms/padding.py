@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-from soundscape_ssl.data.transforms.base import Transform
+from bioacoustic_ssl.data.transforms.base import Transform
 
 
 class Padding(Transform):

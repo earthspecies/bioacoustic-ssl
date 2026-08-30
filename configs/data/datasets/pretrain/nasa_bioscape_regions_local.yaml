@@ -5,7 +5,7 @@
 # nasa_bioscape_events_local.yaml. random_crop_seconds draws a fresh window
 # inside the stored region on every access, so the same region is never re-seen
 # as the same 5 s view — the crop jitter XenoCanto gets for free.
-_target_: soundscape_ssl.data.datasets.NASAEarthAccess
+_target_: bioacoustic_ssl.data.datasets.NASAEarthAccess
 split: BIOSCAPE_REGIONS
 sample_rate: 32000
 n_records: -1

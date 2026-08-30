@@ -24,7 +24,7 @@ class XenoCantoRaw(XenoCanto):
     The ``"audio"`` key produced by the parent class is **never** present.
 
     The primary use-case is to pair this dataset with a bytes-aware
-    :class:`~soundscape_ssl.data.transforms.TimeShift`, which decides the crop
+    :class:`~bioacoustic_ssl.data.transforms.TimeShift`, which decides the crop
     window *before* decoding so that only the required frames are ever decoded.
     For long recordings where only a short clip is needed this can yield a
     substantial speed-up.
@@ -44,7 +44,7 @@ class XenoCantoRaw(XenoCanto):
 
     Examples
     --------
-    >>> from soundscape_ssl.data.datasets import XenoCantoRaw
+    >>> from bioacoustic_ssl.data.datasets import XenoCantoRaw
     >>> ds = XenoCantoRaw(split="train", sample_rate=32000)
     >>> sample = ds[0]
     >>> isinstance(sample["audio_bytes"], bytes)
@@ -168,7 +168,7 @@ class XenoCantoLazy(XenoCanto):
     **Why lazy?**
 
     When paired with the path-aware mode of
-    :class:`~soundscape_ssl.data.transforms.TimeShift`, the transform opens
+    :class:`~bioacoustic_ssl.data.transforms.TimeShift`, the transform opens
     the remote file directly and passes the file-like object to soundfile.
     Because ``gcsfs`` translates ``seek()`` calls into HTTP ``Range`` headers,
     *only the bytes that soundfile actually reads are ever downloaded* —
@@ -196,7 +196,7 @@ class XenoCantoLazy(XenoCanto):
 
     Examples
     --------
-    >>> from soundscape_ssl.data.datasets import XenoCantoLazy
+    >>> from bioacoustic_ssl.data.datasets import XenoCantoLazy
     >>> ds = XenoCantoLazy(split="train", sample_rate=32000)
     >>> sample = ds[0]
     >>> isinstance(sample["audio_path"], str)

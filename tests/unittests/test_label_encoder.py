@@ -12,7 +12,7 @@ These tests pin the two halves of that: normal labels still encode, and a
 import pytest
 import torch
 
-from soundscape_ssl.data.transforms.label_encoder import MultiHotEncoder
+from bioacoustic_ssl.data.transforms.label_encoder import MultiHotEncoder
 
 
 def test_encodes_a_list_of_class_indices() -> None:

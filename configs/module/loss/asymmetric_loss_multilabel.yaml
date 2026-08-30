@@ -1,1 +1,1 @@
-_target_: soundscape_ssl.loss.AsymmetricLossMultiLabel
+_target_: bioacoustic_ssl.loss.AsymmetricLossMultiLabel

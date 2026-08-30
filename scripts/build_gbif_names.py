@@ -49,7 +49,7 @@ import tenacity
 import yaml
 from tqdm import tqdm
 
-import soundscape_ssl.data.datasets  # noqa: F401  — registers the anonymous-GCS filesystem
+import bioacoustic_ssl.data.datasets  # noqa: F401  — registers the anonymous-GCS filesystem
 from alp_data.datasets import XenoCanto
 
 REPO = Path(__file__).resolve().parent.parent

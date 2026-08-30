@@ -1,6 +1,6 @@
 import logging
 
-from soundscape_ssl.data.transforms.base import Transform
+from bioacoustic_ssl.data.transforms.base import Transform
 
 logger = logging.getLogger(__name__)
 

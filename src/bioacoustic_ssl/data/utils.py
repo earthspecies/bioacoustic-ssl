@@ -288,7 +288,7 @@ def class_ids_from_parquet(
     Used from config as a nested ``_target_`` wherever a class list is needed::
 
         class_ids:
-          _target_: soundscape_ssl.data.class_ids_from_parquet
+          _target_: bioacoustic_ssl.data.class_ids_from_parquet
           path: metadata/xc_v0.1.0_all_classes.parquet
 
     Written for the full Xeno-Canto head, whose 10 799 ids would otherwise be

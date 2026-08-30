@@ -5,7 +5,7 @@ from typing import Any
 import torch
 from torch.utils.data import IterableDataset
 
-from soundscape_ssl.data.transforms.base import Compose, Transform
+from bioacoustic_ssl.data.transforms.base import Compose, Transform
 
 
 class MixedStreamingDataset(IterableDataset):

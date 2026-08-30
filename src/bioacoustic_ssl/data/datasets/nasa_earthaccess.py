@@ -219,7 +219,7 @@ class NASAEarthAccess(Dataset):
 
     Examples
     --------
-    >>> from soundscape_ssl.data.datasets import NASAEarthAccess
+    >>> from bioacoustic_ssl.data.datasets import NASAEarthAccess
     >>> ds = NASAEarthAccess(split="S2L", n_records=5)
     >>> item = ds[0]
     >>> item["granule_ur"], item["site"]  # doctest: +SKIP

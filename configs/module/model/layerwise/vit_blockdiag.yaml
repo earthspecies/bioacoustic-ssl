@@ -2,7 +2,7 @@ defaults:
   - /module/model/backbone/vit@_here_
   - _self_
 
-_target_: soundscape_ssl.models.ViTProtoLayerwise
+_target_: bioacoustic_ssl.models.ViTProtoLayerwise
 
 num_classes: ${data.num_classes}
 num_prototypes: 20

@@ -30,7 +30,7 @@ import alp_data.io.filesystem  # noqa: F401  (ensure the submodule is in sys.mod
 # whose namespace is the one ``filesystem_from_path`` reads its global from.
 _fsmod = sys.modules["alp_data.io.filesystem"]
 
-_PATCH_FLAG = "_soundscape_ssl_anon_gcs"
+_PATCH_FLAG = "_bioacoustic_ssl_anon_gcs"
 
 
 def _install() -> None:

@@ -24,7 +24,7 @@ class BeansRaw(Beans):
     The ``"audio"`` key produced by the parent class is **never** present.
 
     Pair this with a bytes-aware
-    :class:`~soundscape_ssl.data.transforms.TimeShift`, which decides the crop
+    :class:`~bioacoustic_ssl.data.transforms.TimeShift`, which decides the crop
     window *before* decoding so that only the required frames are ever decoded.
     """
 

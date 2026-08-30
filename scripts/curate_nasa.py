@@ -1,7 +1,7 @@
 """Curate the NASA Earthdata acoustic collections with AudioProtoPNet.
 
 Streams the per-recording WAVs of the ``BIOSCAPE`` and ``S2L`` splits of
-:class:`~soundscape_ssl.data.datasets.NASAEarthAccess`, windows each recording
+:class:`~bioacoustic_ssl.data.datasets.NASAEarthAccess`, windows each recording
 into fixed-length (default 5 s) segments, runs the
 ``DBD-research-group/AudioProtoPNet-20-BirdSet-XCL`` classifier, and writes the
 segments whose top species probability clears a threshold (default 0.4) to a
@@ -42,7 +42,7 @@ import torch
 from tqdm import tqdm
 from transformers import AutoFeatureExtractor, AutoModelForSequenceClassification
 
-from soundscape_ssl.data.datasets import NASAEarthAccess
+from bioacoustic_ssl.data.datasets import NASAEarthAccess
 
 MODEL_ID = "DBD-research-group/AudioProtoPNet-20-BirdSet-XCL"
 SAMPLE_RATE = 32_000

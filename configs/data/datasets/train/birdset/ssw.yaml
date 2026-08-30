@@ -10,23 +10,23 @@ train:
     audio_bytes: audio_bytes
     label: label
   transformations: 
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class: 
         _target_: polars.Int64
-    - _target_: soundscape_ssl.data.FilterFixConfig
+    - _target_: bioacoustic_ssl.data.FilterFixConfig
       type: filter_fix
       property: gbifID
       values: &cls [5232437, 2482593, 2480320, 2482507, 9809229, 9409198, 2484892, 9192501, 9510564, 5231640, 9149595, 2482492, 2490384, 2484155, 9761484, 2478106, 2487887, 2487805, 5228824, 2498167, 2498338, 2492196, 2495347, 2484391, 2498387, 2481695, 9581157, 2483606, 2481134, 2484591, 2484184, 2492235, 2478259, 2478605, 8323485, 2484597, 2480863, 2475472, 2489181, 6093856, 2489670, 2483597, 5231140, 2491205, 2489590, 7804446, 2494936, 2490804, 2490872, 2487456, 2488517, 2484417, 2481710, 6093199, 2484340, 7341834, 9630752, 7341805, 2490810, 2489985, 7531611, 6092631, 2487430, 6093846, 6092942, 2487446, 2490494, 5231635, 2480621, 5229734, 2482809, 2484879, 2484609, 2497541, 5229688, 9629160, 9362842, 2487453, 2490941, 5231459, 6093374]
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID
       cast_class: 
         _target_: polars.List
         inner:
           _target_: polars.Int64
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID
@@ -41,7 +41,7 @@ test:
     audio: audio
     label: label
   transformations: 
-    - _target_: soundscape_ssl.data.CastConfig
+    - _target_: bioacoustic_ssl.data.CastConfig
       type: cast
       property: gbifID_multispecies
       extract_all_regex: \d+
@@ -49,7 +49,7 @@ test:
         _target_: polars.List
         inner:
           _target_: polars.Int64
-    - _target_: soundscape_ssl.data.MultiLabelFromFeatureConfig
+    - _target_: bioacoustic_ssl.data.MultiLabelFromFeatureConfig
       type: mulitlabel_from_feature
       is_multilabel: True
       feature: gbifID_multispecies

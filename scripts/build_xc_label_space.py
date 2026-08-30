@@ -10,7 +10,7 @@ Writes one artefact per (version, split) pair, e.g. from XC v0.1.0 ``all``:
     in ascending numeric order. Anything that maps logits back to species (the
     model card, BirdSet logit masking) reads this file rather than re-deriving
     the order, and so does the dataset config, via
-    ``soundscape_ssl.data.class_ids_from_parquet``.
+    ``bioacoustic_ssl.data.class_ids_from_parquet``.
 
 **The universe must be built from the split the head actually trains on**, and
 the file name says which one so the two cannot drift apart unnoticed. They did
@@ -34,7 +34,7 @@ is left: a class XC has no vernacular name for keeps a null, and the label space
 is never narrowed by a missing name.
 
 Run where the split CSVs are reachable (they are public GCS objects, read
-anonymously via the ``soundscape_ssl.data.datasets`` filesystem patch):
+anonymously via the ``bioacoustic_ssl.data.datasets`` filesystem patch):
 
     uv run python scripts/build_xc_label_space.py
     uv run python scripts/build_xc_label_space.py --version 0.2.0 --split train
@@ -53,7 +53,7 @@ from pathlib import Path
 
 import polars as pl
 
-import soundscape_ssl.data.datasets  # noqa: F401  — registers the anonymous-GCS filesystem
+import bioacoustic_ssl.data.datasets  # noqa: F401  — registers the anonymous-GCS filesystem
 from alp_data.datasets import XenoCanto
 
 REPO = Path(__file__).resolve().parent.parent

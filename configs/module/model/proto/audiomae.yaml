@@ -6,7 +6,7 @@ defaults:
   - /module/model/backbone/vit_external@_here_
   - _self_
 
-_target_: soundscape_ssl.models.ViTProtoFloat
+_target_: bioacoustic_ssl.models.ViTProtoFloat
 
 # Classification head — identical to the other proto arms, so the comparison is
 # about the backbone.
