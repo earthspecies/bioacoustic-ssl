@@ -60,7 +60,7 @@ train:
       feature: gbifID
       class_ids:
         _target_: soundscape_ssl.data.class_ids_from_parquet
-        path: metadata/xc_v0.1.0_all_classes.parquet
+        path: ${paths.root_dir}/metadata/xc_v0.1.0_all_classes.parquet
 
 test:
   _target_: alp_data.DatasetConfig
@@ -87,7 +87,7 @@ test:
       property: gbifID
       values:
         _target_: soundscape_ssl.data.class_ids_from_parquet
-        path: metadata/xc_v0.1.0_all_classes.parquet
+        path: ${paths.root_dir}/metadata/xc_v0.1.0_all_classes.parquet
     - _target_: soundscape_ssl.data.CastConfig
       type: cast
       property: gbifID
@@ -101,4 +101,4 @@ test:
       feature: gbifID
       class_ids:
         _target_: soundscape_ssl.data.class_ids_from_parquet
-        path: metadata/xc_v0.1.0_all_classes.parquet
+        path: ${paths.root_dir}/metadata/xc_v0.1.0_all_classes.parquet

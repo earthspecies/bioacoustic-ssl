@@ -11,3 +11,5 @@ data:
   #weights: [384, 43, 85] #  XC ~261, BSC ~265, S2L ~269, STS ~57; ~are epochs
   weights: [256, 85, 171] #  XC ~261, BSC ~265, S2L ~269, STS ~57; ~are epochs
   #[384, 52, 52, 24]
+
+run_name: Pretrain-XC-NASA-regions-balanced-${seed}

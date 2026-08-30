@@ -24,10 +24,5 @@ hydra:
   sweeper:
     params:
       seed: 1
-      #data/datasets: train/beans/bats, train/beans/cbi #, train/beans/dogs, train/beans/esc50, train/beans/humbugdb, train/beans/watkins
-      data/datasets: train/beans/cbi #, train/beans/dogs, train/beans/esc50, train/beans/humbugdb, train/beans/watkins
-      #data/datasets: train/beans/bats, train/beans/humbugdb, train/beans/watkins
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt, /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terra_marine.ckpt, /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terra_marine_long.ckpt
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terrestrial.ckpt
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_long.ckpt # xc (long)
-      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt # xc (long)
+      data/datasets: train/beans/bats, train/beans/cbi, train/beans/dogs, train/beans/esc50, train/beans/humbugdb, train/beans/watkins
+      trainer.resume_from_checkpoint: ${paths.ckpt_dir}/XC_nasa_400k.ckpt

@@ -1,12 +1,18 @@
+# Portable defaults: modest worker counts that fit a laptop or a single small
+# node. The cluster profiles are `data/loaders={a100,h100}` (17/35 workers) for
+# probing and `data/loaders=pretrain` (48) for pretraining — every sweep sets one
+# of those explicitly.
+#
+# Workers use `spawn` (fork is unsafe with the XC dataset), which copies the
+# dataset's record table into every worker, so RAM scales with `num_workers`
+# — raise it against the box's memory, not just its core count.
 train:
   batch_size: 256
-  num_workers: 25
+  num_workers: 4
   pin_memory: True
   persistent_workers: True
-  #prefetch_factor: 6
 val_test:
   batch_size: 128
-  num_workers: 25
+  num_workers: 4
   pin_memory: True
   persistent_workers: True
-  #prefetch_factor: 6

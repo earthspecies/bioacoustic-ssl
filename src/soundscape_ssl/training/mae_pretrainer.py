@@ -98,9 +98,10 @@ def pretrain(fabric: Fabric, cfg: DictConfig) -> None:
 
     if fabric.is_global_zero:
         run = wandb.init(
-            entity="mwirth",
-            project="soundscape_ssl",
-            name=f"Pretrain-XC",
+            entity=cfg.logger.entity,
+            project=cfg.logger.project,
+            mode=cfg.logger.mode,
+            name=cfg.run_name,
             config=OmegaConf.to_container(cfg, resolve=True)  # type: ignore
         )
 

@@ -39,14 +39,10 @@ docs/
 
 scripts/curate_nasa_peak.py
 scripts/curate_nasa_random.py
-scripts/slurm/curate_nasa_peak_a100.sh
-scripts/slurm/curate_nasa_random_a100.sh
 scripts/birdset_masked_eval.py
 scripts/export_results_cache.py
 
 configs/experiment/xc_classifier/birdset_masked.yaml
-scripts/slurm/xc_classifier/birdset_masked_h100.sh
-scripts/slurm/xc_classifier/vit_layerwise_capacity_h100.sh
 
 metadata/*.csv
 curated/
@@ -58,3 +54,15 @@ Thumbs.db
 
 outputs
 detections
+
+# Site-local Hydra launchers. `configs/hydra/launcher/slurm.yaml` is the tracked,
+# env-driven one; anything a specific cluster needs on top (per-job venv, module
+# loads, scratch mounts) stays here and out of the repo.
+configs/hydra/launcher/gpu.yaml
+configs/hydra/launcher/gpu_h100.yaml
+configs/hydra/launcher/*.local.yaml
+
+# Site-local sbatch wrappers: partitions, node lists, scratch venvs, one-off
+# resubmits. The tracked, generic ones live in scripts/slurm/examples/.
+scripts/slurm/*
+!scripts/slurm/examples

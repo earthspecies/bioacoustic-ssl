@@ -1,21 +1,21 @@
-# soundscape_mae — unlabeled PAM in bioacoustic MAE pretraining
+# soundscape_mae
 
-Research code for a single question:
+Research code for one question:
 
-> **Can unlabeled passive-acoustic-monitoring (PAM) / soundscape audio improve a
-> bioacoustic MAE backbone over Xeno-Canto (XC) alone — and if so, how must it be
-> selected?**
+> Can unlabeled passive-acoustic-monitoring (PAM) audio improve a bioacoustic MAE
+> backbone over Xeno-Canto (XC) alone, and if so, how must that audio be selected?
 
-The pipeline is: MAE-pretrain a ViT-B/16 on 5 s @ 32 kHz mel spectrograms from a
-weighted mix of corpora, then probe the frozen encoder on **BirdSet** (8 tasks)
-and **BEANS** (6 tasks) against published baselines (Bird-MAE-Base, AudioMAE, BAT).
+The pipeline is short. MAE-pretrain a ViT-B/16 on 5 s, 32 kHz mel spectrograms
+drawn from a weighted mix of corpora, then probe the frozen encoder on **BirdSet**
+(8 tasks) and **BEANS** (6 tasks) against published baselines (Bird-MAE-Base,
+AudioMAE, BAT).
 
-**Metric of record:** BirdSet cmAP, test-set mean over 7 tasks (POW = validation,
-always excluded).
+Metric of record is BirdSet cmAP, test-set mean over 7 tasks. POW is BirdSet's own
+validation split and is always excluded.
 
 ## Where things stand
 
-Short version as of 2026-08:
+As of 2026-08:
 
 | Backbone | BirdSet layerwise cmAP (test mean, 7 tasks) |
 |---|---|
@@ -26,56 +26,73 @@ Short version as of 2026-08:
 | **XC 1M** | **0.460** |
 | XC + NASA 1M | 0.457 |
 
-- Act 1 holds: our XC-only backbone reaches/exceeds Bird-MAE-Base parity.
-- **Schedule length is the only effect clearing the probe noise floor** (+0.035
-  for 400k→1M, 7/7 datasets; noise floor ≤0.001).
-- **NASA soundscapes are null on BirdSet** — sign flips with schedule, magnitude
-  at the noise floor — and mildly *diluting* along the step curve.
-- The only positive PAM signal is a small single-seed cross-domain gain on BEANS
-  (+0.006 mean, 3/5 up), which still lacks its matched layerwise XC-only control.
+Our XC-only backbone reaches Bird-MAE-Base parity, which was the first thing worth
+checking. Beyond that, schedule length is the only effect clearing the probe noise
+floor, at +0.035 for 400k to 1M on 7 of 7 datasets against a noise floor of ~0.001.
+NASA soundscapes come out null on BirdSet. The sign flips with schedule length and
+the magnitude sits at the noise floor. The one positive PAM signal is a small
+single-seed cross-domain gain on BEANS (+0.006 mean, 3 of 5 up), which still lacks
+its matched layerwise XC-only control.
 
-## Layout
+## What is in the repo
 
 ```
-src/soundscape_ssl/     library (installed package)
-  data/
-    datasets/           one module per corpus (see table below)
-    transforms/         audio + batched-spectrogram transform pipeline
-    iterable_dataset.py MixedStreamingDataset — weighted infinite mix of map-style datasets
-  models/
-    architectures/      mae, vit (encoder/decoder/classifier/proto heads), bat
-    components/         attention, block, mlp, patch_embed, pos_embed
-  training/
-    mae_pretrainer.py   Fabric pretraining loop
-    repr_eval.py        representation eval (kNN / ridge probe)
-  loss/, metrics/, eval/
+src/soundscape_ssl/      the installed library
+  data/datasets/         one module per corpus (table below)
+  data/transforms/       audio and batched-spectrogram transforms
+  data/iterable_dataset.py   MixedStreamingDataset, a weighted infinite mix of
+                             map-style datasets
+  models/architectures/  mae, vit (encoder, decoder, classifier, prototypical
+                         heads), bat
+  models/components/     attention, block, mlp, patch_embed, pos_embed
+  training/              mae_pretrainer.py (Fabric loop), repr_eval.py,
+                         lr_scheduler.py
+  loss/, metrics/
 
-configs/                Hydra config tree (see "Configuration")
-scripts/                entry points + one-off curation / probe / verification scripts
-scripts/slurm/          sbatch wrappers, incl. sweeps/{proto,layerwise,linear,finetune}/
-notebooks/              tutorial.ipynb (config -> data -> model walkthrough) + result
-                        aggregation (birdset_results*.ipynb, beans_results.ipynb)
-metadata/               NASA granule metadata, frozen label spaces, gbifID->species names
-                        (tracked; source CSVs are not)
-curated/                curated NASA event/region indices and materialized audio
-tests/                  consistency (docstrings), unittests, integration
+hf_model/                the published HuggingFace model code. Release payload,
+                         copied into the model repo, not part of the library
+configs/                 Hydra config tree (see "Configuration")
+scripts/                 three entry points plus curation, conversion and export
+scripts/slurm/examples/  five generic sbatch wrappers
+notebooks/               tutorial.ipynb (config to data to model walkthrough) and
+                         xc_0.1_vs_0.2.ipynb (XC version comparison)
+metadata/                NASA granule tables and the frozen XC label spaces
+tests/                   docstring consistency plus unit tests
 ```
+
+Everything generated stays out of git: `checkpoints/`, `curated/` (materialized
+NASA shards), `artifacts/` (exported HuggingFace models), `outputs/` (Hydra run
+directories), and all of `scripts/slurm/` outside `examples/`. Result-aggregation
+notebooks and site-local sbatch wrappers are local too, so a fresh clone will not
+have them.
+
+Three entry points, all Hydra apps:
+
+| Script | Does |
+|---|---|
+| `scripts/pretrain.py` | MAE pretraining |
+| `scripts/birdset_eval.py` | BirdSet probing and finetuning, and the full-XC head |
+| `scripts/beans_eval.py` | BEANS probing |
+
+The rest of `scripts/` is supporting work: `earthdata_login.py`,
+`build_xc_label_space.py`, `convert_external_ckpt.py`, `curate_nasa.py`,
+`materialize_nasa_events.py`, `materialize_nasa_regions.py`, `export_hf_model.py`.
 
 ## Setup
 
-Package manager is **uv**; everything runs through `uv run`.
+The package manager is **uv**, and everything runs through `uv run`.
 
 ```bash
-uv sync                          # dev + gpu groups by default
-cp .env.example .env             # then fill in real values
+uv sync                                    # dev + gpu groups by default
+cp .env.example .env                       # then fill in real values
 uv run python scripts/earthdata_login.py   # once per machine, for NASA Earthdata
 ```
 
-Secrets and shared env (W&B, HF, Earthdata, CA bundle, HF cache) live in the
-gitignored `.env`. Python entry points call `load_dotenv()`; slurm scripts
-`source` it after the `#SBATCH` block. See `.env.example`.
+Secrets and shared environment (W&B, HF, Earthdata, CA bundle, HF cache) live in
+the gitignored `.env`. Python entry points call `load_dotenv()`, and the slurm
+scripts `source` it after the `#SBATCH` block. See `.env.example`.
 
-For a CPU-only box: `uv sync --group cpu` (the `cpu`/`gpu` groups conflict).
+On a CPU-only box use `uv sync --group cpu`. The `cpu` and `gpu` groups conflict.
 
 ## Pretraining
 
@@ -88,159 +105,267 @@ uv run torchrun --nproc_per_node=4 scripts/pretrain.py \
   experiment=pretrain/pretrain_xc trainer.devices=4 trainer.strategy=ddp
 
 # cluster
-sbatch scripts/slurm/pretrain.sh
+sbatch scripts/slurm/examples/pretrain.sh
 ```
 
-Available pretraining experiments (`configs/experiment/pretrain/`):
+The mixes in `configs/experiment/pretrain/`:
 
-| Experiment | Mix |
-|---|---|
-| `pretrain_xc` | XC only |
-| `pretrain_xc_pam_new` | XC + NASA BioScape/S2L fixed 5 s event slices, `w=[384,43,85]` |
-| `pretrain_xc_nasa_regions` | same granules stored as 10–60 s regions, fresh random 5 s crop per access |
-| `pretrain_xc_nasa_regions_balanced` | as above, rebalanced weights |
-| `pretrain_xc_pam_audioset` | XC + AudioSet (never run) |
+| Experiment | Mix | Weights |
+|---|---|---|
+| `pretrain_xc` | XC only | `null` |
+| `pretrain_xc_nasa_regions` | XC + NASA BioScape and S2L regions | `[384, 43, 85]`, 75 % XC |
+| `pretrain_xc_nasa_regions_balanced` | same three sources, rebalanced | `[256, 85, 171]`, 50 % XC |
+| `pretrain_xc_pam_new` | currently identical to the balanced arm | `[256, 85, 171]` |
 
-`data.weights` are **`MixedStreamingDataset` sampling weights, not dataset
-sizes** — `[384,43,85]` is 75 % XC. Always verify the *logged* weights against the
-config; a past run silently trained on a uniform mix.
+`pretrain_xc_pam_new` is worth a warning. Its name says fixed 5 s event slices, but
+the file now composes the same three region datasets as the balanced arm, at the
+same weights and under the same `run_name`. The event-slice mix it used to run is
+commented out inside the file. Two configs that launch identical runs is a trap, so
+either delete it or restore the mix it names.
 
-Two `configs/trainer/pretrain.yaml` keys to check before every launch:
-`resume_from_checkpoint` is **hardcoded to the last run's checkpoint** (set it to
-`null` for a cold run), and `warm_restart` decides whether the cosine schedule is
-restarted over the remaining steps or continued. Warm vs cold matters: ~60 % of
-the apparent 400k→1M gain is already present at equal step count, i.e. partly a
-warm-restart difference rather than extra steps. `eval_every_n_steps` runs the
-in-loop representation eval (`training/repr_eval.py`, POW linear/GAP probe) to W&B.
+`data.weights` are `MixedStreamingDataset` sampling weights, not dataset sizes.
+Always check the *logged* weights against the config. One past run silently trained
+on a uniform mix.
 
-## Evaluation
+Two keys in `configs/trainer/pretrain.yaml` deserve a look before every launch.
+`resume_from_checkpoint` defaults to `null`, a cold start, and points at a
+checkpoint to continue a run. `warm_restart` decides whether the cosine schedule
+restarts over the remaining steps or continues. The difference matters: about 60 %
+of the apparent 400k to 1M gain is already there at equal step count, so part of it
+is a warm-restart effect rather than extra steps. `eval_every_n_steps` runs the
+in-loop representation eval (`training/repr_eval.py`, a POW linear and GAP probe)
+and logs it to W&B.
 
-Two entry points, both Hydra multirun + submitit:
+## Downstream evaluation
+
+Both eval entry points are Hydra multirun plus submitit.
 
 ```bash
-# BirdSet, layerwise probe, one job per dataset × checkpoint
+# BirdSet, layerwise probe, one job per dataset x checkpoint
 uv run python scripts/birdset_eval.py --multirun \
-  experiment=sweeps/layerwise/birdset/vit hydra/launcher=gpu_h100
+  experiment=sweeps/layerwise/birdset/vit hydra/launcher=slurm
 
 # BEANS
 uv run python scripts/beans_eval.py --multirun \
-  experiment=sweeps/proto/beans/vit hydra/launcher=gpu_h100
+  experiment=sweeps/proto/beans/vit hydra/launcher=slurm
 ```
 
-The sweep grid (datasets, checkpoints, seeds) is the `hydra.sweeper.params`
-block *inside* the experiment config — edit it there, not on the command line.
-`scripts/slurm/sweeps/<head>/<benchmark>/<backbone>_<partition>.sh` wraps each
-combination as a small job-manager sbatch that fans the per-dataset GPU jobs out.
+`hydra/launcher=slurm` is the tracked, generic submitit launcher. Partition, cpus,
+memory, wall clock and array parallelism all come from `$SLURM_LAUNCHER_*` (see
+`.env.example`), so it needs no edit on a new cluster. A site that needs more, such
+as a per-job venv, module loads or a scratch mount, keeps its own launcher file in
+`configs/hydra/launcher/` (gitignored) and selects it with `HYDRA_LAUNCHER=<name>`,
+which the example wrappers honour.
 
-Four heads, all 1250 steps with the same transforms/LR recipe. Resolve which head
-a run used from (`module.model._target_`, `module.freeze_backbone`) — the target
-alone confuses finetuning with final-layer probing:
+The sweep grid (datasets, checkpoints, seeds) lives in the `hydra.sweeper.params`
+block *inside* the experiment config. Edit it there, not on the command line.
+`scripts/slurm/examples/sweep_birdset_layerwise.sh` and `sweep_beans_proto.sh` wrap
+a sweep as a small job-manager sbatch that fans the per-dataset GPU jobs out and
+exits. Copy one per arm, and keep cluster-specific wrappers in `scripts/slurm/`,
+which is gitignored. See `scripts/slurm/examples/README.md`.
+
+Four heads, all 1250 steps on the same transforms and LR recipe. Work out which
+head a run used from the pair (`module.model._target_`, `module.freeze_backbone`).
+The target alone confuses finetuning with final-layer probing.
 
 | Head | Config | Encoder | Readout |
 |---|---|---|---|
-| final-layer (FL) | `sweeps/proto/birdset/vit.yaml` | frozen | cosine-prototype on last block |
-| layerwise (LW) | `sweeps/layerwise/birdset/vit.yaml` | frozen | same head on learned softmax sum of all 12 blocks |
+| final-layer | `sweeps/proto/birdset/vit.yaml` | frozen | cosine-prototype on the last block |
+| layerwise | `sweeps/layerwise/birdset/vit.yaml` | frozen | same head on a learned softmax sum of all 12 blocks |
 | linear | `sweeps/linear/birdset/vit.yaml` | frozen | `nn.Linear` on CLS |
-| finetune | `sweeps/finetune/birdset/vit.yaml` | trainable | FL head, encoder unfrozen |
+| finetune | `sweeps/finetune/birdset/vit.yaml` | trainable | final-layer head, encoder unfrozen |
 
-Observed head ordering: **linear ≪ layerwise ≈ FL ≲ finetune**. Linear probing
-cannot rank these backbones (0.13 vs 0.46 cmAP on identical frozen weights).
+Ranked by score, linear is far behind, layerwise and final-layer land close
+together, and finetune is a little ahead of both. Linear probing cannot rank these
+backbones at all, giving 0.13 against 0.46 cmAP on identical frozen weights.
 
-External baselines load **bit-exactly into our own `ViTEncoder`** — no wrapper, no
-`timm`/`transformers` at runtime. Convert once, then probe with the normal configs:
+External baselines load bit-exactly into our own `ViTEncoder`, with no wrapper and
+no `timm` or `transformers` at runtime. Convert once, then probe with the normal
+configs:
 
 ```bash
-uv run python scripts/convert_external_ckpt.py audiomae   # or birdmae
+uv run python scripts/convert_external_ckpt.py birdmae_base   # or audiomae
 ```
+
+`scripts/slurm/examples/birdmae_base_birdset.sh` runs the conversion and the probe
+as one job, and shows the triple that has to move together: the checkpoint,
+`module/model=*/birdmae` for the external geometry, and `data/transforms=birdmae`.
+
+## The HuggingFace release
+
+The released model is **XenoMAE**, in two artifacts:
+
+- `base`, the pretrained ViT-B/16 MAE encoder at 86 M parameters. The MAE decoder
+  is dropped, so `AutoModel` returns the encoder.
+- `xc-classifier`, that same encoder frozen under a layerwise prototypical head
+  trained over all 10 799 Xeno-Canto taxa. Not a bird-only head: 9 733 Aves plus
+  508 amphibians, 423 insects and 135 mammals. It carries its own encoder copy and
+  ships `xc_classes.parquet`, the map from output index to gbifID that logit
+  masking needs.
+
+`hf_model/` holds three modules that get copied verbatim into the model repo and
+import nothing from `soundscape_ssl`: `configuration_xenomae`, `modeling_xenomae`
+and `feature_extraction_xenomae`. `conversion.py` stays here, because nobody
+loading the weights needs it.
+
+Training the head, then exporting both artifacts:
+
+```bash
+# train the full-XC head on a frozen pretraining checkpoint
+uv run python scripts/birdset_eval.py --multirun \
+  experiment=xc_classifier/vit_layerwise hydra/launcher=slurm
+
+# export
+uv run python scripts/export_hf_model.py base \
+  --ckpt $CKPT_DIR/XC_1M.ckpt --out artifacts/xenomae/base
+uv run python scripts/export_hf_model.py xc-classifier \
+  --ckpt $CKPT_DIR/xc_head_XC_1M_step_0100000.ckpt --out artifacts/xenomae/xc-classifier
+```
+
+The export is gated. Before anything is written, the published model is checked
+against the in-repo model that produced the checkpoint on a fixed input, and the
+check is repeated against the artifact reloaded from disk. Bit-exact or nothing.
+`tests/unittests/test_hf_xenomae.py` asserts the same property on a tiny geometry
+with random weights, so the conversion stays a key rename rather than a
+re-implementation that happens to agree.
+
+The head's label space is frozen in `metadata/xc_v0.1.0_all_classes.parquet`, built
+by `scripts/build_xc_label_space.py` from exactly the (version, split) pair the
+train stream reads. Rebuild it whenever either changes. The two have silently
+diverged once already, which put 8 gbifIDs outside the label space and left 946
+output units with no training audio.
+
+Note that several docstrings still tell you to run the release code under
+`uv run --with "transformers==4.57.1"`. That was needed when the project pinned
+torch 2.6. Since the bump to torch 2.11 the project environment imports `hf_model`
+and passes its tests directly. `scripts/curate_nasa.py` still needs its own
+override, because AudioProtoPNet's remote code wants transformers 4.x.
 
 ## Data sources
 
-`src/soundscape_ssl/data/datasets/`, wired up via `configs/data/datasets/`:
+Modules in `src/soundscape_ssl/data/datasets/`, wired up through
+`configs/data/datasets/`:
 
 | Module | Corpus | Notes |
 |---|---|---|
-| `xeno_canto.py` | Xeno-Canto | `XenoCantoRaw` (bytes, used for pretraining) / `XenoCantoLazy` |
-| `nasa_earthaccess.py` | NASA BioSCape + Soundscapes-to-Landscapes | core PAM corpus, many splits (below) |
-| `a2o_site.py` | Australian Acoustic Observatory | optional arm; license usage uncertain |
-| `arbimon.py` | Arbimon | **dropped** — license forbids scraping at scale |
-| `soundscape_pretrain.py` | HF `soundscape-pretrain` | a2o/arbimon have *different schemas*; load each via its own parquet glob |
-| `beans.py`, `audioset.py`, `inaturalist.py` | downstream / aux | |
+| `xeno_canto.py` | Xeno-Canto | `XenoCantoRaw` (bytes, what pretraining uses) and `XenoCantoLazy` |
+| `nasa_earthaccess.py` | NASA BioSCape + Soundscapes-to-Landscapes | the core PAM corpus, several splits (below) |
+| `a2o_site.py` | Australian Acoustic Observatory | optional arm, license usage uncertain |
+| `beans.py`, `audioset.py`, `inaturalist.py` | downstream and auxiliary | |
 | `noaa.py`, `noaa_bucket.py`, `sanctsound.py`, `pifsc.py` | marine PAM | |
 
-NASA splits (`NASAEarthAccess(split=...)`), all sharing one loader:
+NASA splits, selected with `NASAEarthAccess(split=...)` and all sharing one loader:
 
-- `BIOSCAPE` / `S2L` — full granules, streamed from the ORNL DAAC over HTTP range reads.
-- `*_EVENTS` — one row per ≥0.7 AudioProtoPNet detection, fetched over the network.
-- `*_EVENTS_LOCAL`, `*_REGIONS` — materialized locally as flat `.bin` + parquet
-  index and read via `np.memmap`.
+- `BIOSCAPE` and `S2L`, full granules streamed from the ORNL DAAC over HTTP range
+  reads.
+- `*_EVENTS`, one row per AudioProtoPNet detection at 0.7 or above, fetched over
+  the network.
+- `*_EVENTS_LOCAL` and `*_REGIONS`, materialized locally as a flat `.bin` plus a
+  parquet index and read through `np.memmap`.
 
-Materialization / curation scripts:
+The scripts that produce those local stores:
 
 | Script | Purpose |
 |---|---|
-| `curate_nasa.py` | model-confidence arm — AudioProtoPNet-20-BirdSet-XCL scores 5 s windows |
-| `materialize_nasa_events.py` | download + decode the 5 s event slices to local shards |
-| `materialize_nasa_regions.py` | store contiguous 10–60 s regions instead (fresh crop per access) |
+| `curate_nasa.py` | scores 5 s windows with AudioProtoPNet-20-BirdSet-XCL and writes the detections |
+| `materialize_nasa_events.py` | downloads and decodes the fixed 5 s event slices into local shards |
+| `materialize_nasa_regions.py` | stores contiguous 10 to 60 s regions instead, so each access gets a fresh crop |
 
-`curate_nasa.py`'s curator needs `transformers` 4.x — run it with a
-`uv run --with` override, not the project env.
+Regions exist because of a repetition asymmetry. A 400k-step run at 25 % PAM weight
+re-draws each identical fixed 5 s event view about 330 times, against about 19 for
+XC, whose crop offset is redrawn every epoch. The region store cuts that to about
+76.
 
 ## Configuration
 
-Hydra, root configs `configs/pretrain.yaml` and `configs/train.yaml`:
+Hydra, with root configs `configs/pretrain.yaml` and `configs/train.yaml`. Both
+compose and run on a clean clone with no checkpoints, no cluster and no W&B team.
+`configs/train.yaml` defaults to BirdSet HSN with the block-diagonal layerwise
+prototypical head on a randomly initialised encoder.
+
+```bash
+uv run python scripts/birdset_eval.py                       # the default arm
+uv run python scripts/birdset_eval.py --cfg job --resolve   # print it, run nothing
+uv run python scripts/beans_eval.py experiment=beans        # the BEANS equivalent
+```
+
+Every published arm is one `experiment=...` away from that. Machine-specific values
+are environment variables rather than config edits: `$CKPT_DIR` (where
+`trainer.resume_from_checkpoint` and the sweeps read pretraining checkpoints from,
+defaulting to `./checkpoints`), `$PROJECT_ROOT`, and `$WANDB_ENTITY`,
+`$WANDB_PROJECT`, `$WANDB_MODE`. See `.env.example`.
 
 ```
 data/
   pretrain.yaml | train.yaml       datasets + transforms + loaders
-  datasets/pretrain/*              one file per pretraining corpus/split
+  datasets/pretrain/*              one file per pretraining corpus or split
   datasets/train/{birdset,beans}/  one file per downstream task
-  transforms/                      pretrain, audiomae, birdmae, bat, ...
-  loaders/                         default, pretrain, a100 (batch size / workers)
+  datasets/train/xc_all.yaml       the full-XC stream the released head trains on
+  transforms/                      pretrain, audiomae, birdmae, bat, multiclass
+  loaders/                         default, pretrain, a100, h100 (batch size, workers)
 module/
   mae.yaml | vit.yaml              optimizer + scheduler + loss + metrics
   model/{mae,proto,layerwise,linear,backbone}/
 experiment/
   pretrain/*                       the pretraining mixes
-  sweeps/<head>/<benchmark>/<backbone>.yaml   eval sweeps incl. their sweeper grid
+  sweeps/<head>/<benchmark>/<backbone>.yaml   eval sweeps, sweeper grid included
+  xc_classifier/vit_layerwise.yaml the full-XC head for the release
 trainer/{pretrain,train}.yaml
-hydra/launcher/{gpu,gpu_h100}.yaml submitit
+hydra/launcher/slurm.yaml          submitit, resources from $SLURM_LAUNCHER_*
 ```
 
-Anything is overridable on the CLI, e.g.
+Anything is overridable on the command line, for example
 `uv run python scripts/pretrain.py module.model.encoder_depth=6 trainer.max_steps=1000`.
 
-## Operational notes / known pitfalls
+## Known pitfalls
 
-Hard-won, all of these have cost a run at least once:
+Every one of these has cost a run at least once.
 
-- **Dataloaders must use `spawn`** — `fork` is unsafe with the XC dataset. Spawn
-  copies ~900k records per worker, so RAM scales with `num_workers` (OOM at
-  20 workers / 34 GB).
-- **NASA parquet OOM** — `pq.read_table(memory_map=True)` does *not* share pages;
-  every worker copies the whole audio column. Fixed by the flat `.bin` + memmap
-  layout the materialization scripts write.
-- **Representation / kNN eval must run in fp32** — bf16 autocast collapses the
+- Dataloaders must use `spawn`. `fork` is unsafe with the XC dataset, but spawn
+  copies about 900k records per worker, so RAM scales with `num_workers`. We hit
+  OOM at 20 workers and 34 GB.
+- NASA parquet OOM. `pq.read_table(memory_map=True)` does not share pages, so every
+  worker copies the whole audio column. The flat `.bin` plus memmap layout the
+  materialization scripts write is the fix.
+- Representation and kNN eval must run in fp32. bf16 autocast collapses the
   anisotropic MAE kNN to chance.
-- **Resolve backbones by full checkpoint path, not basename** —
+- Resolve backbones by full checkpoint path, never by basename.
   `step_0400000.ckpt` collides across three encoders.
-- Resample with `soxr_hq`, not `kaiser_best` (330 ms/clip → the NOAA slowness).
-- VBR-MP3 duration overestimates produce empty crops → `PeakNormalize` crash.
-- GCS reads are forced anonymous via `data/datasets/_gcs_anon.py` (public buckets;
-  fixes expiring-ADC auth on long runs).
-- Probing label maps: a train/test label index shift from missing XC species
-  manifests as random NES/PER/UHH scores.
+- Resample with `soxr_hq`, not `kaiser_best`, which took 330 ms per clip and was
+  the real cause of the NOAA slowness.
+- VBR-MP3 duration overestimates produce empty crops, which crash `PeakNormalize`.
+- GCS reads are forced anonymous through `data/datasets/_gcs_anon.py`. The buckets
+  are public, and this fixes expiring-ADC auth on long runs.
+- A train/test label index shift from missing XC species shows up as random NES,
+  PER and UHH scores rather than as an error.
+- The full-XC head needs `mixer: block_diagonal` and `proto_chunk`. The dense mixer
+  is quadratic in class count, reaching 2.3 billion parameters at 10 799 classes,
+  and the unchunked similarity tensor is 28.3 GB in bf16 at batch 256.
 
 ## Development
 
 ```bash
 uv run pytest tests/unittests
-uv run pytest tests/consistency --base_folder soundscape_ssl
-uv run pytest --doctest-modules soundscape_ssl
+uv run pytest tests/consistency --base_folder src/soundscape_ssl
+uv run pytest --doctest-modules src/soundscape_ssl
 uv run ruff check . && uv run ruff format --check .
 ```
 
-`pre-commit install` once; CI (`.github/workflows/ci.yml`) runs the same checks
-plus `deptry`. `tests/` and `scripts/` are excluded from ruff. The
-example template tests (`tests/integration/test_VanilaNN.py`,
-`tests/unittests/test_linear.py`) are still the inherited placeholders — the
-library itself has no unit tests yet.
+None of them is fully green right now. The honest state:
+
+- `tests/unittests` passes except `test_linear.py`, which is an inherited template
+  placeholder importing a `my_dummy_library` that does not exist. Same for
+  `tests/integration/test_VanilaNN.py`. The real tests are `test_hf_xenomae.py` and
+  `test_label_encoder.py`.
+- `tests/consistency` fails on missing docstrings in `metrics/topk_accuracy.py` and
+  a few other modules.
+- The doctests fail in `a2o_site.py` and `noaa_bucket.py`, whose examples reach
+  the network.
+- `ruff check` reports about 550 findings, mostly missing docstring sections, and
+  `ruff format` would reformat 51 files. `tests/` and `scripts/` are excluded from
+  ruff.
+
+Both GitHub workflows (`ci.yml`, `pre-commit.yml`) are `workflow_dispatch` only.
+They were switched to manual while the research code is in flux, and the push and
+pull_request triggers are commented out inside each file. Run `pre-commit install`
+locally if you want the hooks.

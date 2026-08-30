@@ -167,8 +167,9 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
 
     if fabric.is_global_zero:
         run = wandb.init(
-            entity="mwirth",
-            project="soundscape_ssl",
+            entity=cfg.logger.entity,
+            project=cfg.logger.project,
+            mode=cfg.logger.mode,
             name=_format_run_name(cfg.run_name),
             config=OmegaConf.to_container(cfg, resolve=True)  # type: ignore
         )
@@ -289,10 +290,12 @@ def _log_layer_weights(model: nn.Module, run: wandb.Run, global_step: int) -> No
         return
 
     w = torch.softmax(layer_weights.detach().float(), dim=0).cpu()
-    layers = torch.arange(1, w.numel() + 1, dtype=w.dtype)
+    # Offset by the head's fused-block range (see ViTProtoLayerwise.fusion_blocks).
+    blocks = getattr(model, "fusion_blocks", None) or list(range(1, w.numel() + 1))
+    layers = torch.tensor(blocks, dtype=w.dtype)
     centroid = float((w * layers).sum())  # 1-indexed; ~last layer if mass is late
     run.log({
-        **{f"layer_weights/block_{i + 1:02d}": float(v) for i, v in enumerate(w)},
+        **{f"layer_weights/block_{b:02d}": float(v) for b, v in zip(blocks, w)},
         "layer_weights/centroid": centroid,
     }, step=global_step)
 

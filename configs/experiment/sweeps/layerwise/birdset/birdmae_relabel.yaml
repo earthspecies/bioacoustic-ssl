@@ -20,4 +20,4 @@ hydra:
     params:
       seed: 1
       data/datasets: train/birdset/nes, train/birdset/per, train/birdset/sne
-      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/birdmae_base.ckpt
+      trainer.resume_from_checkpoint: ${paths.ckpt_dir}/birdmae_base.ckpt

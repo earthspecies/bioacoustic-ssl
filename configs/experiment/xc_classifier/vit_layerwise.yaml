@@ -89,7 +89,7 @@ run_name: XCall-${trainer.resume_from_checkpoint}-${seed}-layerwise
 val_masked:
   enabled: false
   every_n_steps: 5000
-  xc_classes: metadata/xc_v0.1.0_all_classes.parquet
+  xc_classes: ${paths.root_dir}/metadata/xc_v0.1.0_all_classes.parquet
   # Score for a task species the head has no output for; any constant works —
   # it makes the class unrankable, which is the truth about it. Reported
   # separately as `*_covered`, the macro over only the predictable classes.
@@ -120,4 +120,4 @@ hydra:
       # trainer/train.yaml logs every step, which is right for a 1250-step probe
       # and 100 000 W&B rows of loss here.
       trainer.log_every_n_steps: 50
-      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt
+      trainer.resume_from_checkpoint: ${paths.ckpt_dir}/XC_nasa_1M.ckpt

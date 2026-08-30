@@ -4,7 +4,7 @@ Writes one artefact per (version, split) pair, e.g. from XC v0.1.0 ``all``:
 
 ``metadata/xc_v0.1.0_all_classes.parquet``
     One row per class: ``label_index``, ``gbifID``, ``canonical_name``,
-    ``family``, ``genus``, ``n_train_recordings``. ``label_index`` is the head's
+    ``common_name``, ``family``, ``genus``, ``n_train_recordings``. ``label_index`` is the head's
     output index, and it is *derived*, not chosen: ``MultiLabelFromFeature``
     builds its map as ``sorted(set(class_ids))``, so index == rank of the gbifID
     in ascending numeric order. Anything that maps logits back to species (the
@@ -27,6 +27,11 @@ split in the config.
 A class with no training audio is a class the head cannot learn, so building
 from ``train`` while training on ``all`` is also wrong: it discards the 9
 species that only ``validation`` has. Build from what you train on.
+
+``common_name`` is joined in from ``metadata/gbif_names.parquet``, so run
+``scripts/build_gbif_names.py`` first when the class universe changes. The join
+is left: a class XC has no vernacular name for keeps a null, and the label space
+is never narrowed by a missing name.
 
 Run where the split CSVs are reachable (they are public GCS objects, read
 anonymously via the ``soundscape_ssl.data.datasets`` filesystem patch):
@@ -52,6 +57,7 @@ import soundscape_ssl.data.datasets  # noqa: F401  — registers the anonymous-G
 from alp_data.datasets import XenoCanto
 
 REPO = Path(__file__).resolve().parent.parent
+NAMES = REPO / "metadata" / "gbif_names.parquet"
 
 
 def build(version: str, split: str) -> None:
@@ -70,6 +76,8 @@ def build(version: str, split: str) -> None:
     df = pl.read_csv(csv, infer_schema_length=0)
     df = df.with_columns(pl.col("gbifID").cast(pl.Float64).cast(pl.Int64))
 
+    names = pl.read_parquet(NAMES, columns=["gbifID", "common_name"])
+
     classes = (
         df.group_by("gbifID")
         .agg(
@@ -78,16 +86,18 @@ def build(version: str, split: str) -> None:
             pl.col("genus").first(),
             pl.len().alias("n_train_recordings"),
         )
+        .join(names, on="gbifID", how="left")
         .sort("gbifID")                       # == MultiLabelFromFeature's ordering
         .with_row_index("label_index")
-        .select(["label_index", "gbifID", "canonical_name", "family", "genus",
-                 "n_train_recordings"])
+        .select(["label_index", "gbifID", "canonical_name", "common_name", "family",
+                 "genus", "n_train_recordings"])
     )
 
     out.parent.mkdir(parents=True, exist_ok=True)
     classes.write_parquet(out)
 
     print(f"{classes.height} classes over {df.height} recordings")
+    print(f"  common name for {int(classes['common_name'].is_not_null().sum())} of them")
     print(f"  -> {out.relative_to(REPO)}")
     n = classes["n_train_recordings"]
     print(f"  recordings/class: min {n.min()} median {int(n.median())} max {n.max()} "

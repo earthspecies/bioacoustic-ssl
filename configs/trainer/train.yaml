@@ -19,6 +19,8 @@ save_checkpoints: false
 # + scheduler + step, unlike `resume_from_checkpoint` below, which only reads
 # `encoder.*` out of a PRETRAINING checkpoint and always starts at step 0.
 resume_from_state: null
-resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt # XC # 2026-06-05/12-15-53
-#resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terrestrial.ckpt # XC + terrestrial # 2026-06-05/18-02-48
+# A PRETRAINING checkpoint whose `encoder.*` weights initialise the backbone.
+# `null` = randomly initialised encoder, which is the only thing a clean clone
+# can run; every probe arm points it at a file under `${paths.ckpt_dir}`.
+resume_from_checkpoint: null
 

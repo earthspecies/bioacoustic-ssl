@@ -21,3 +21,5 @@ defaults:
 
 data:
   weights: [384, 43, 85]  # [xc_raw, nasa_bioscape_regions, nasa_s2l_regions]
+
+run_name: Pretrain-XC-NASA-regions-${seed}

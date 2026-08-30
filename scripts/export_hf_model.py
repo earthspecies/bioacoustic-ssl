@@ -11,7 +11,10 @@ Two artifacts, one HuggingFace model repo, one subfolder each (spec ADR 0002):
     That same encoder, frozen, under the layerwise prototypical head trained
     over all 10 799 Xeno-Canto taxa. Carries its own encoder copy, so it loads on
     its own, and ships ``xc_classes.parquet`` beside the weights — the map from
-    output index to ``gbifID`` that logit masking needs.
+    output index to ``gbifID`` that logit masking needs, and to the scientific
+    and English common name that displaying a prediction needs. ``id2label`` in
+    ``config.json`` is the scientific name: common names are missing for 436
+    taxa and shared by 38 pairs, so they cannot key ``label2id``.
 
 Both get ``config.json``, ``model.safetensors``, ``preprocessor_config.json``
 (the mel front-end), and a copy of the three published modules so the weights
@@ -41,25 +44,29 @@ load_dotenv()  # load repo .env (secrets, HF cache, CA bundle) before other impo
 
 import argparse
 import shutil
+import sys
 from pathlib import Path
 
 import pandas as pd
 import torch
 import torch.nn as nn
 
-from soundscape_ssl.hf import (
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))  # `hf_model` is release payload, not an installed package
+
+from hf_model import (  # noqa: E402
     XenoMAEFeatureExtractor,
     XenoMAEForAudioClassification,
     XenoMAEModel,
 )
-from soundscape_ssl.hf.conversion import (
+from hf_model.conversion import (  # noqa: E402
     RELEASE_HEAD,
     build_config,
     classifier_state_dict,
     encoder_state_dict,
     reference_encoder_kwargs,
 )
-from soundscape_ssl.models import ViTEncoder, ViTProtoLayerwise
+from soundscape_ssl.models import ViTEncoder, ViTProtoLayerwise  # noqa: E402
 
 # Pointers into the copied modules, so `AutoModel.from_pretrained(..., trust_remote_code=True)`
 # resolves without this repository. Written into both config.json and
@@ -135,7 +142,7 @@ def write_artifact(model: nn.Module, out: Path) -> None:
     extractor.auto_map = AUTO_MAP
     extractor.save_pretrained(out)
 
-    source = Path(__file__).resolve().parent.parent / "src" / "soundscape_ssl" / "hf"
+    source = REPO_ROOT / "hf_model"
     for module in PUBLISHED_MODULES:
         shutil.copy(source / module, out / module)
 
@@ -174,6 +181,12 @@ def export_classifier(ckpt: Path, out: Path, classes: Path) -> None:
         classes: The frozen class parquet the head was trained against.
     """
     labels = pd.read_parquet(classes).sort_values("label_index")
+    if "common_name" not in labels:
+        raise SystemExit(
+            f"{classes} has no common_name column. Rebuild it — scripts/build_gbif_names.py "
+            "then scripts/build_xc_label_space.py — rather than publish a head whose "
+            "predictions cannot be read back as species names."
+        )
     config = build_config(id2label=dict(zip(labels.label_index, labels.canonical_name, strict=True)))
 
     state = load_model_state(ckpt)
@@ -213,7 +226,9 @@ def export_classifier(ckpt: Path, out: Path, classes: Path) -> None:
 
     print(f"{ckpt} -> {out}")
     print(f"  {sum(p.numel() for p in published.parameters()):,} parameters")
-    print(f"  {config.num_labels} labels, output index -> gbifID in xc_classes.parquet")
+    named = int(labels.common_name.notna().sum())
+    print(f"  {config.num_labels} labels, output index -> gbifID / scientific / common name "
+          f"in xc_classes.parquet ({named} have a common name)")
 
 
 def main() -> None:

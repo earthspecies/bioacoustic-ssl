@@ -1,4 +1,7 @@
 # @package _global_
+#
+# MAE pretraining. Entry point: scripts/pretrain.py. Defaults to the XC-only mix
+# from a cold start; the published mixes are in configs/experiment/pretrain/.
 defaults:
   - _self_
   - data: pretrain
@@ -8,3 +11,11 @@ defaults:
   - trainer: pretrain
 
 seed: 42
+
+run_name: pretrain-${seed}
+
+# See configs/train.yaml for what these do.
+logger:
+  entity: ${oc.env:WANDB_ENTITY,null}
+  project: ${oc.env:WANDB_PROJECT,soundscape_ssl}
+  mode: ${oc.env:WANDB_MODE,online}

@@ -1,5 +1,8 @@
 defaults:
-  - model: proto/vit
+  # Block-diagonal layerwise prototypical head: the default readout. Swap it per
+  # arm with `module/model=proto/vit`, `linear/vit`, ... (see
+  # configs/module/model/ and the sweeps under configs/experiment/sweeps/).
+  - model: layerwise/vit_blockdiag
   - loss: asymmetric_loss_multilabel
   - metrics: [map, map_per_class, auroc, t1]
 

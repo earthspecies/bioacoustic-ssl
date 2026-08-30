@@ -7,3 +7,5 @@ defaults:
 
 data:
   weights: null
+
+run_name: Pretrain-XC-${seed}

@@ -28,7 +28,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 
-from soundscape_ssl.data import Compose, compute_sample_weights
+from soundscape_ssl.data import Compose, apply_logit_mask, compute_sample_weights, logit_mask
 from soundscape_ssl.models import ViTClassifier, ViTProtoFloat
 from soundscape_ssl.models.utils.lr_decay import param_groups_lrd
 from soundscape_ssl.training.lr_scheduler import CosineWarmupScheduler
@@ -112,7 +112,10 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
 
     _ = iter(train_loader)
 
-    _ = iter(test_loader)
+    # Skip the test-loader warmup when validation is off: it spawns
+    # `val_test.num_workers` processes that would never be used.
+    if cfg.trainer.validate_amount:
+        _ = iter(test_loader)
 
     model = instantiate(cfg.module.model)
     if cfg.module.get("freeze_backbone", True):
@@ -148,8 +151,9 @@ def main(fabric: Fabric, cfg: DictConfig) -> None:
 
     if fabric.is_global_zero:
         run = wandb.init(
-            entity="mwirth",
-            project="soundscape_ssl",
+            entity=cfg.logger.entity,
+            project=cfg.logger.project,
+            mode=cfg.logger.mode,
             name=_format_run_name(cfg.run_name),
             config=OmegaConf.to_container(cfg, resolve=True)  # type: ignore
         )
@@ -192,8 +196,15 @@ def train(fabric: Fabric,
           class_ids: list | None = None) -> int:
     max_steps = cfg.trainer.max_steps
     log_every = cfg.trainer.get("log_every_n_steps", 50)
-    validate_every = max_steps // cfg.trainer.validate_amount
+    # `validate_amount: 0` disables validation entirely (the full-XC classifier
+    # run, which is scored later by masked BirdSet evaluation, not on-line).
+    validate_amount = cfg.trainer.validate_amount
+    validate_every = max_steps // validate_amount if validate_amount else 0
     save_every = cfg.trainer.save_every_n_steps
+    # Masked BirdSet validation (POW by default). None unless `val_masked` is
+    # enabled, which only the full-label-space runs do.
+    validate_masked = build_masked_validator(fabric, cfg)
+    validate_masked_every = int(cfg.val_masked.every_n_steps) if validate_masked else 0
 
     step_bar = tqdm(
         desc="Training",
@@ -230,9 +241,13 @@ def train(fabric: Fabric,
                          },
                          step=global_step)
 
-            if global_step % validate_every == 0:
+            if validate_every and global_step % validate_every == 0:
                 validate(fabric, model, test_loader, criterion, test_metrics, run, global_step, class_ids)
                 model.train()
+
+            if validate_masked_every and global_step % validate_masked_every == 0:
+                validate_masked(model, run, global_step)
+                _log_layer_weights(model, run, global_step)
 
             # Off by default: a full state checkpoint is ~2.5 GB for the
             # 11 737-class XC head, and the 1250-step benchmark probes have no
@@ -245,6 +260,99 @@ def train(fabric: Fabric,
                 break
 
     return global_step
+
+
+def build_masked_validator(fabric: Fabric, cfg: DictConfig):
+    """Periodic masked-BirdSet validation for a full-label-space head.
+
+    Why this exists: the full-XC run sets ``validate_amount: 0`` — the only
+    in-distribution split is XC ``validation``, which is now inside the train
+    split — so it has NO stopping signal at all, and the 100 k-step run spent
+    98 k steps after its loss floor (~1 800) without anything noticing. This
+    scores the head the way it is actually judged: restrict the logits to one
+    BirdSet task's species and compute that task's own metrics.
+
+    The task is POW by default. POW is BirdSet's validation split and is already
+    excluded from every published test-set mean, so selecting a checkpoint on it
+    does not touch a test set.
+
+    Returns ``None`` when ``val_masked`` is absent or disabled, so the ordinary
+    per-task probes are unaffected.
+    """
+    vcfg = cfg.get("val_masked")
+    if not vcfg or not vcfg.get("enabled", False):
+        return None
+
+    dataset, meta = dataset_from_config(instantiate(vcfg.dataset))
+    label_meta = meta.get("mulitlabel_from_feature") or meta.get("label_from_feature") or {}
+    class_ids = [cid for cid, _ in sorted(label_meta["label_map"].items(), key=lambda kv: kv[1])]
+
+    mask, head_classes = logit_mask(vcfg.xc_classes, class_ids)
+    if head_classes != cfg.data.num_classes:
+        raise ValueError(
+            f"val_masked.xc_classes has {head_classes} classes but the head has "
+            f"{cfg.data.num_classes}. The mask would re-index against a label space "
+            f"the head does not have and report plausible wrong numbers."
+        )
+    uncovered = mask < 0
+    fill = float(vcfg.uncovered_fill)
+
+    loader = DataLoader(
+        dataset,
+        **cfg.data.loaders.val_test,
+        collate_fn=Compose(build_stages_list(cfg.data.transforms, "test")),  # type: ignore
+        multiprocessing_context=mp.get_context("spawn"),
+        drop_last=False,
+        shuffle=False,
+    )
+    loader = fabric.setup_dataloaders(loader)
+
+    # Metrics over the TASK's label space, not the head's. `cfg.module.metrics`
+    # is bound to `data.num_classes`, so num_labels is overridden per metric.
+    metrics = []
+    for item in cfg.module.metrics.values():
+        item = OmegaConf.to_container(item, resolve=True)
+        item.pop("_stage_", None)
+        if "num_labels" in item:
+            item["num_labels"] = len(class_ids)
+        metrics.append(instantiate(item))
+
+    tag = str(vcfg.dataset.test.split).split("-")[0].lower()
+    log.info(
+        f"Masked validation on {vcfg.dataset.test.split}: {len(class_ids)} classes "
+        f"out of {head_classes} head outputs ({int(uncovered.sum())} uncovered), "
+        f"every {vcfg.every_n_steps} steps, logged under val_{tag}/."
+    )
+
+    @torch.no_grad()
+    def validate_masked(model: nn.Module, run: wandb.Run, global_step: int) -> None:
+        model.eval()
+        for metric in metrics:
+            metric.reset()
+
+        for batch in loader:
+            with fabric.autocast():
+                logits = model(batch["spectrogram"])
+            preds = apply_logit_mask(logits.float(), mask.to(logits.device), fill)
+            for metric in metrics:
+                metric.update(preds.cpu(), batch["label"].int().cpu())
+
+        if fabric.is_global_zero:
+            logs = {}
+            for metric in metrics:
+                value = metric.compute()
+                if value.ndim == 0:
+                    logs[f"val_{tag}/{metric.__class__.__name__}"] = float(value)
+                else:
+                    # Per-class metric: only the macro over the classes the head
+                    # can actually predict, so the uncovered species' chance
+                    # floor is not read as a model result.
+                    logs[f"val_{tag}/{metric.__class__.__name__}_covered"] = float(value[~uncovered].mean())
+            run.log(logs, step=global_step)
+            log.info(f"step {global_step}: " + "  ".join(f"{k}={v:.4f}" for k, v in logs.items()))
+        model.train()
+
+    return validate_masked
 
 
 @torch.no_grad()
@@ -261,10 +369,14 @@ def _log_layer_weights(model: nn.Module, run: wandb.Run, global_step: int) -> No
         return
 
     w = torch.softmax(layer_weights.detach().float(), dim=0).cpu()
-    layers = torch.arange(1, w.numel() + 1, dtype=w.dtype)
+    # Which encoder block each weight belongs to. Identity unless the head sets
+    # `fusion_layers`, when the weights cover only the last k blocks and both
+    # the keys and the centroid must be offset to stay comparable across runs.
+    blocks = getattr(model, "fusion_blocks", None) or list(range(1, w.numel() + 1))
+    layers = torch.tensor(blocks, dtype=w.dtype)
     centroid = float((w * layers).sum())  # 1-indexed; ~last layer if mass is late
     run.log({
-        **{f"layer_weights/block_{i + 1:02d}": float(v) for i, v in enumerate(w)},
+        **{f"layer_weights/block_{b:02d}": float(v) for b, v in zip(blocks, w)},
         "layer_weights/centroid": centroid,
     }, step=global_step)
 
@@ -335,7 +447,13 @@ def _save_checkpoint(
     step: int,
     cfg: DictConfig,
 ) -> None:
-    ckpt_dir = Path(cfg.paths.checkpoint_dir)
+    # Namespaced by run name, not by the hydra job dir alone. `hydra.sweep.dir`
+    # is pinned per sweep and job indices restart at 0 on every submission, so a
+    # single-arm relaunch (a resume, or the second backbone submitted on its own)
+    # lands in job dir 0 and writes `step_XXXXXXX.ckpt` straight over the head of
+    # whichever arm was job 0 last time — same filename, different backbone, no
+    # warning. The formatted run name carries the arm, so it cannot.
+    ckpt_dir = Path(cfg.paths.checkpoint_dir) / _format_run_name(cfg.run_name)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = ckpt_dir / f"step_{step:07d}.ckpt"
     fabric.save(ckpt_path, {"model": model, "optimizer": optimizer, "scheduler": scheduler, "step": step})

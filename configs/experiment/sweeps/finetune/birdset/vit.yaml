@@ -29,5 +29,4 @@ hydra:
     params:
       seed: 1
       data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt
-      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_1M.ckpt, /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_1M.ckpt
+      trainer.resume_from_checkpoint: ${paths.ckpt_dir}/XC_1M.ckpt, ${paths.ckpt_dir}/XC_nasa_1M.ckpt

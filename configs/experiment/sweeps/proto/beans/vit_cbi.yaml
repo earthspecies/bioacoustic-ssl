@@ -25,4 +25,4 @@ hydra:
     params:
       seed: 1
       data/datasets: train/beans/cbi
-      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt
+      trainer.resume_from_checkpoint: ${paths.ckpt_dir}/XC_nasa_400k.ckpt

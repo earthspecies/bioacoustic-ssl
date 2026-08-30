@@ -1,4 +1,12 @@
 # @package _global_
+#
+# Downstream probing / finetuning. Entry points: scripts/birdset_eval.py and
+# scripts/beans_eval.py.
+#
+# The defaults below are a runnable configuration on a clean clone with no
+# checkpoints and no cluster: BirdSet HSN, block-diagonal layerwise prototypical
+# head, randomly initialised encoder. Every published arm changes exactly one of
+# those via `experiment=...` (see configs/experiment/sweeps/).
 defaults:
   - _self_
   - data: train
@@ -10,3 +18,11 @@ defaults:
 seed: 42
 
 run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}
+
+# W&B. `entity: null` logs to the API key's own default entity, which is what a
+# fresh clone wants; set $WANDB_ENTITY to log into a team. $WANDB_MODE=offline
+# (or `disabled`) runs without a network round-trip.
+logger:
+  entity: ${oc.env:WANDB_ENTITY,null}
+  project: ${oc.env:WANDB_PROJECT,soundscape_ssl}
+  mode: ${oc.env:WANDB_MODE,online}

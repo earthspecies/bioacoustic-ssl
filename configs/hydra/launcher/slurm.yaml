@@ -1,0 +1,69 @@
+# @package hydra.launcher
+#
+# Generic submitit/Slurm launcher — `--multirun ... hydra/launcher=slurm` fans
+# one GPU job out per sweep combination (dataset x checkpoint x seed).
+#
+# Everything site-specific is an env var with a working default, so a clean
+# clone runs this file unedited; put your cluster's values in `.env` (see
+# `.env.example`):
+#
+#   SLURM_LAUNCHER_PARTITION     partition to submit to          (default: gpu)
+#   SLURM_LAUNCHER_CPUS          cpus per task                   (default: 8)
+#   SLURM_LAUNCHER_MEM_GB        memory per job, GB              (default: 120)
+#   SLURM_LAUNCHER_GRES          generic resources               (default: gpu:1)
+#   SLURM_LAUNCHER_TIMEOUT_MIN   wall clock, minutes             (default: 2880)
+#   SLURM_LAUNCHER_PARALLELISM   jobs running at once            (default: 3)
+#   SLURM_LAUNCHER_ACCOUNT       -A                              (default: unset)
+#   SLURM_LAUNCHER_QOS           --qos                           (default: unset)
+#   SLURM_LAUNCHER_CONSTRAINT    -C                              (default: unset)
+#   SLURM_LAUNCHER_EXCLUDE       nodes to avoid                  (default: unset)
+#
+# The names are prefixed rather than reusing `SLURM_PARTITION` /
+# `SLURM_CPUS_PER_TASK`: Slurm sets those itself inside an allocation, so a
+# sweep launched from within an sbatch job would silently inherit the job
+# manager's values instead of these.
+#
+# A site that needs more than these knobs (a per-job venv, module loads, a
+# scratch mount) should keep its own launcher file next to this one and leave it
+# untracked — that is what `configs/hydra/launcher/gpu*.yaml` are, and .gitignore
+# already covers them.
+_target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
+submitit_folder: ${hydra.sweep.dir}/.submitit/%j
+
+name: ${hydra.job.name}
+timeout_min: ${oc.decode:${oc.env:SLURM_LAUNCHER_TIMEOUT_MIN,'2880'}}
+partition: ${oc.env:SLURM_LAUNCHER_PARTITION,gpu}
+gres: ${oc.env:SLURM_LAUNCHER_GRES,gpu:1}
+cpus_per_task: ${oc.decode:${oc.env:SLURM_LAUNCHER_CPUS,'8'}}
+mem_gb: ${oc.decode:${oc.env:SLURM_LAUNCHER_MEM_GB,'120'}}
+nodes: 1
+tasks_per_node: 1
+array_parallelism: ${oc.decode:${oc.env:SLURM_LAUNCHER_PARALLELISM,'3'}}
+
+account: ${oc.env:SLURM_LAUNCHER_ACCOUNT,null}
+qos: ${oc.env:SLURM_LAUNCHER_QOS,null}
+constraint: ${oc.env:SLURM_LAUNCHER_CONSTRAINT,null}
+exclude: ${oc.env:SLURM_LAUNCHER_EXCLUDE,null}
+
+# Left to Slurm/submitit defaults; set them per site in a local launcher.
+gpus_per_node: null
+gpus_per_task: null
+cpus_per_gpu: null
+mem_per_gpu: null
+mem_per_cpu: null
+comment: null
+signal_delay_s: 120
+max_num_timeout: 0
+stderr_to_stdout: true
+additional_parameters: {}
+
+setup:
+  - date
+  # submitit runs the job from the submitting directory; be explicit so a
+  # relative `.env` and the gitignored `checkpoints/` resolve the same way they
+  # do for a run started by hand.
+  - cd ${oc.env:PROJECT_ROOT,${oc.env:PWD,.}}
+  # Secrets + shared env (WANDB_*, HF_*, CA bundle). See .env.example.
+  - set -a
+  - test -f .env && source .env
+  - set +a

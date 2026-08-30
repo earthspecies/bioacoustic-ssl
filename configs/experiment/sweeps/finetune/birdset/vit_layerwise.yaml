@@ -1,0 +1,31 @@
+# @package _global_
+
+# Full finetuning with the prototypical head: identical to sweeps/proto/birdset/vit
+# except the encoder is trainable. `module.freeze_backbone: false` is the only
+# difference — everything else (base_lr, prototype_lr, layer_decay, transforms,
+# max_steps) is inherited unchanged, so this is a clean probing-vs-finetuning
+# contrast rather than a re-tuned recipe.
+#
+# With the backbone unfrozen, param_groups_lrd finally does what it was written
+# for: the head keeps its fixed `prototype_lr`, and the encoder gets layer-wise
+# LR decay (0.75^(13-layer_id)) on top of `base_lr * batch_size / 256`.
+#
+# H100 only — ViT-B backward at batch_size 256 does not fit an A100-40. If it
+# ever gets tight, `module.model.grad_checkpoint: true` is the escape hatch.
+
+defaults:
+  - override /data: train
+#  - override /data/loaders: a100
+  - override /module/model: layerwise/vit
+
+module:
+  freeze_backbone: false
+
+run_name: ${data.datasets.test.split}-${trainer.resume_from_checkpoint}-${seed}-layerwise-finetune
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      trainer.resume_from_checkpoint: ${paths.ckpt_dir}/XC_1M.ckpt, ${paths.ckpt_dir}/XC_nasa_1M.ckpt

@@ -1,2 +1,17 @@
+# Repo root — where `checkpoints/`, `metadata/` and `curated/` live. The launch
+# directory (Hydra 1.3 does not chdir), or $PROJECT_ROOT if set.
+#
+# Deliberately NOT `${hydra:runtime.cwd}`: `hydra.sweeper.params` values are
+# resolved before HydraConfig exists, so a sweep pointing at
+# `${paths.ckpt_dir}/...` would die with "HydraConfig was not set".
+root_dir: ${oc.env:PROJECT_ROOT,${oc.env:PWD,.}}
+
+# This run's own output tree (Hydra creates it) and the checkpoints it writes.
 output_dir: ${hydra:runtime.output_dir}
 checkpoint_dir: ${paths.output_dir}/checkpoints
+
+# Where PRETRAINING checkpoints are read FROM — what
+# `trainer.resume_from_checkpoint` and the eval sweeps point at. The gitignored
+# `checkpoints/` in the clone; set $CKPT_DIR to keep them elsewhere (a shared
+# scratch mount, say).
+ckpt_dir: ${oc.env:CKPT_DIR,${paths.root_dir}/checkpoints}

@@ -6,10 +6,6 @@ defaults:
   - override /data/transforms: multiclass
   - override /module/metrics: [acc]
   - override /module/loss: ce
-#  - override /trainer: train
-
-#trainer:
-#  resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt #, /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terra_marine.ckpt
 
 data:
   class_weighting:

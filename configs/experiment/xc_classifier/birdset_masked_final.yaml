@@ -1,0 +1,69 @@
+# @package _global_
+
+# FINAL-LAYER arm of the masked BirdSet evaluation. Identical to
+# xc_classifier/birdset_masked in every respect except the head it scores: the
+# prototypical head read off the encoder's last block (`proto/vit_xc`,
+# ViTProtoFloat) rather than off a learned softmax fusion of the last 4 blocks.
+# It scores the head trained by scripts/slurm/xc_classifier/vit_finallayer_capacity_h100.sh.
+#
+# See birdset_masked.yaml for the full rationale — what logit masking does and
+# does not change, why the label space is pinned to the file the head trained
+# against, the three BirdSet species no XC-trained head can carry, the bf16
+# note, and the `XCmask-` run-name prefix. All of it applies here unchanged.
+#
+# WHY THIS IS A SEPARATE FILE rather than a `module/model=proto/vit_xc` override
+# on the sibling config: that config assigns `module.model.fusion_layers`, which
+# is a global-package assignment applied whichever model group is selected. Point
+# it at ViTProtoFloat and the key survives into `**encoder_kwargs`, giving
+# `TypeError: ViTEncoder.__init__() got an unexpected keyword argument
+# 'fusion_layers'`. Loud rather than silent, but the head shape and the
+# checkpoint have to travel together regardless — so each head gets a config that
+# describes it completely, the same way configs/experiment/sweeps/*/birdset/
+# keeps one file per head. Do NOT add a `fusion_layers` key below.
+#
+# The two arms are matched to within 6 148 trainable parameters (83.055 M here
+# against 83.061 M, the fusion softmax and its per-block norms being the whole
+# difference), so a gap between them is the representation, not capacity.
+
+defaults:
+  - override /data: train
+  - override /data/datasets: train/birdset/hsn
+  - override /data/loaders: default
+  - override /module/model: proto/vit_xc
+  - override /module/metrics: [map, map_per_class, auroc, t1]
+
+# THE HEAD'S SHAPE. `num_prototypes` and the `trainer.resume_from_state`
+# checkpoint below describe ONE head and must move together; `proto/vit_xc`
+# defaults to 20, the capacity arms were trained at 10. A mismatch fails loudly
+# in `fabric.load` on the prototype shapes, which is the good outcome.
+#
+# Safe at the experiment level: train.yaml merges the `module` group BEFORE
+# `experiment`, so an experiment assignment wins. (`trainer.*` is the opposite
+# case, which is why `resume_from_state` has to be a sweeper param.)
+module:
+  model:
+    num_prototypes: 20
+
+# Distinguishes these rows from the layerwise arm's `XC_1M-p10-f4`. Filter W&B on
+# this together with the `XCmask-` prefix.
+head_tag: XC_1M-p10-final
+
+run_name: XCmask-${data.datasets.test.split}-${head_tag}-${trainer.resume_from_state}-${seed}
+
+mask:
+  # MUST be the label space the head trained against. The final-layer capacity
+  # run post-dates the cb93286 rebuild and its launcher runs
+  # scripts/build_xc_label_space.py, so it is the v0.1.0 `all` file, 10 799 wide.
+  xc_classes: ${paths.root_dir}/metadata/xc_v0.1.0_all_classes.parquet
+  uncovered_fill: -1.0e4
+
+hydra:
+  sweeper:
+    params:
+      seed: 1
+      data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      # The trained-head checkpoint written by birdset_eval.py's _save_checkpoint,
+      # NOT a pretraining checkpoint — see birdset_masked.yaml. Final step of the
+      # final-layer capacity run (25 000 steps, saved every 5 000).
+      trainer.resume_from_state: ${paths.root_dir}/multirun/xc_classifier/vit_finallayer_capacity/0/checkpoints/XCall-XC_1M-p20-final-1-proto/step_0025000.ckpt
+      # Earlier steps of the SAME head can be swept together:

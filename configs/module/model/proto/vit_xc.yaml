@@ -1,0 +1,33 @@
+defaults:
+  - /module/model/backbone/vit@_here_
+  - _self_
+
+_target_: soundscape_ssl.models.ViTProtoFloat
+
+# Final-layer counterpart of layerwise/vit_xc: the SAME prototypical head over
+# the full Xeno-Canto label space, read off the encoder's last block instead of a
+# learned softmax fusion of all 12. The ablation arm for "is the layerwise
+# fusion earning its keep on this task?".
+#
+# The two forwards are identical from the focal subtraction onward (same
+# `patch - cls`, same reshape, same PrototypicalFloat), so the only difference is
+# the representation fed in: ViTEncoder's final block AFTER its own `norm` here,
+# against the weighted sum of the per-block PRE-norm hidden states there (which
+# supplies its own `layer_norms`). That is the same way the published
+# `final_layer` and `layerwise` probe arms differ, so this arm is comparable to
+# both.
+#
+# No `layer_weights` / `layer_norms` exist on this model, so
+# `module.optimizer.layer_weights_lr` simply builds no group for them
+# (`param_groups_lrd` guards on `if lw_params:`) and the layer-weight logging in
+# birdset_eval.py no-ops on the missing attribute. Neither needs changing.
+num_classes: ${data.num_classes}
+num_prototypes: 20
+head_drop: 0.0
+
+# Both REQUIRED at this label space, for the reasons layerwise/vit_xc documents:
+# the dense mixer is quadratic in num_classes (2.3 billion parameters at 10 799)
+# and the unchunked similarity tensor is tens of GB. Same values as that config
+# so the arms differ only in the fusion.
+mixer: block_diagonal
+proto_chunk: 4096

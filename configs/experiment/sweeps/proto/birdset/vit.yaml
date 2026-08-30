@@ -17,12 +17,5 @@ hydra:
   sweeper:
     params:
       seed: 1
-      #data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
-      data/datasets: train/birdset/sne, train/birdset/ssw
-      #data/datasets: train/birdset/sne, train/birdset/ssw
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC.ckpt #, /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terrestrial.ckpt
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terrestrial.ckpt
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terra_marine.ckpt # xc + terra + marine
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_ssl/checkpoints/XC_terra_marine_long.ckpt # xc + terra + marine (long)
-      trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_long.ckpt # xc (long)
-      #trainer.resume_from_checkpoint: /home/moritz_earthspecies_org/soundscape_mae/checkpoints/XC_nasa_400k.ckpt # xc (long)
+      data/datasets: train/birdset/hsn, train/birdset/nbp, train/birdset/nes, train/birdset/per, train/birdset/pow, train/birdset/sne, train/birdset/ssw, train/birdset/uhh
+      trainer.resume_from_checkpoint: ${paths.ckpt_dir}/XC_long.ckpt # xc (long)

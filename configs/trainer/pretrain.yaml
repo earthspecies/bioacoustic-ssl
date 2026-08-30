@@ -2,10 +2,12 @@ accelerator: gpu
 devices: 1
 strategy: auto
 precision: bf16-mixed
-max_steps: 400000 # absolute target; 200k original + 200k warm-restart continuation
+max_steps: 400000
 warm_restart: false # fresh cosine (warmup→peak→min_lr) over the remaining steps; keeps weights+optimizer+step, ignores the checkpoint's decayed LR state
 grad_clip: 1.0
 log_every_n_steps: 200
 save_every_n_steps: 20000
 eval_every_n_steps: 5000   # representation eval (LP/GAP cmap/auroc POW) → wandb; null to disable
+# `null` = cold start. Set it to continue from an existing pretraining
+# checkpoint, and decide `warm_restart` at the same time.
 resume_from_checkpoint: null
