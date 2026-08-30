@@ -1,8 +1,10 @@
 [project]
 name = "soundscape-ssl"
-version = "1.0.0"
-description = "A simple boiler plate for continuous integration and good practices of ESP projects."
+version = "0.1.1"
+description = "Masked-autoencoder pretraining for bioacoustics: does unlabeled soundscape (PAM) audio improve a Xeno-Canto MAE backbone?"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 
 requires-python = ">=3.12,<3.14"
 
