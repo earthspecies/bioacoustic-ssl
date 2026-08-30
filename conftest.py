@@ -11,11 +11,9 @@ import pytest
 def pytest_addoption(parser: pytest.Parser) -> None:
     """This functionis used to decorate automatically other functions
     with arguments that should be passed to all unit tests functions.
-    For now we only support the device argument.
     """
     parser.addoption("--base_folder", action="store", default=".")
     parser.addoption("--skip_files_list", action="store", default=[".pyc"])
-    parser.addoption("--device", action="store", default="cpu")
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -30,7 +28,3 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     option_value = metafunc.config.option.base_folder
     if "base_folder" in metafunc.fixturenames and option_value is not None:
         metafunc.parametrize("base_folder", [option_value])
-
-    option_value = metafunc.config.option.device
-    if "device" in metafunc.fixturenames and option_value is not None:
-        metafunc.parametrize("device", [option_value])

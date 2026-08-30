@@ -1,4 +1,4 @@
-# soundscape_mae
+# bioacoustic-ssl
 
 Research code for one question:
 
@@ -93,6 +93,15 @@ the gitignored `.env`. Python entry points call `load_dotenv()`, and the slurm
 scripts `source` it after the `#SBATCH` block. See `.env.example`.
 
 On a CPU-only box use `uv sync --group cpu`. The `cpu` and `gpu` groups conflict.
+
+`requirements.txt` and `requirements-dev.txt` are exported from `uv.lock` by the
+pre-commit hooks and exist only for pip users; `pyproject.toml` plus `uv.lock`
+are the source of truth. The Linux torch pin is `2.11.0+cu126`, which PyPI does
+not carry, so pip needs the PyTorch index:
+
+```bash
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu126
+```
 
 ## Pretraining
 
@@ -316,3 +325,26 @@ hydra/launcher/slurm.yaml          submitit, resources from $SLURM_LAUNCHER_*
 
 Anything is overridable on the command line, for example
 `uv run python scripts/pretrain.py module.model.encoder_depth=6 trainer.max_steps=1000`.
+
+## Licenses
+
+The code and the weights are licensed differently, and the difference is
+deliberate.
+
+**Code — MIT** (`LICENSE`). Everything in this repository: the library, the
+scripts, the configs, and the `hf_model/` modules copied into the model repo.
+
+**Weights — CC BY-NC-SA 4.0.** Both XenoMAE artifacts. The pretraining corpus is
+predominantly Xeno-Canto, whose recordings are mostly CC BY-NC-SA, so the weights
+inherit a non-commercial share-alike stance (the same reading BirdNET takes).
+**Commercial use of the weights is not permitted**, even though the code carries
+no such restriction.
+
+**Data — not redistributed here.** Xeno-Canto recordings stay under their
+individual per-recording Creative Commons licenses and belong to the recordists
+who made them; NASA BioSCape and Soundscapes-to-Landscapes are fetched from the
+ORNL DAAC under a free Earthdata login. This repository ships metadata and
+indices, never audio.
+
+XenoMAE is not affiliated with or endorsed by xeno-canto.org, which is a
+volunteer-run foundation with no involvement in this work.

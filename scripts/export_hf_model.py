@@ -26,16 +26,17 @@ and the check is repeated against the artifact reloaded from disk. Bit-exact or
 nothing: a conversion that cannot prove parity is not published. The gate is why
 this script exists rather than a notebook cell.
 
-The project env pins ``transformers>=5.6.1``, which needs torch >= 2.7 against
-this env's 2.6, so run it under the same override the repo uses elsewhere::
+Runs in the project env directly. The ``transformers==4.57.1`` override this
+docstring used to prescribe was needed only while the project pinned torch 2.6;
+since the bump to torch 2.11 the env imports ``hf_model`` and passes its tests::
 
-    uv run --with "transformers==4.57.1" python scripts/export_hf_model.py base \
-        --ckpt /mnt/home/soundscape_mae/checkpoints/XC_1M.ckpt \
-        --out artifacts/soundscape-mae/base
+    uv run python scripts/export_hf_model.py base \
+        --ckpt $CKPT_DIR/XC_1M.ckpt \
+        --out artifacts/xenomae/base
 
-    uv run --with "transformers==4.57.1" python scripts/export_hf_model.py xc-classifier \
-        --ckpt /mnt/home/soundscape_mae/checkpoints/xc_head_XC_1M_step_0100000.ckpt \
-        --out artifacts/soundscape-mae/xc-classifier
+    uv run python scripts/export_hf_model.py xc-classifier \
+        --ckpt $CKPT_DIR/xc_head_XC_1M_step_0100000.ckpt \
+        --out artifacts/xenomae/xc-classifier
 """
 
 from dotenv import load_dotenv

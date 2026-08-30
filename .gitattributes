@@ -1,0 +1,4 @@
+# GitHub language stats: the notebooks are result artifacts, not the library, and
+# their embedded output blobs are large enough to dominate the language bar.
+# linguist-documentation keeps them browsable and diffable but out of the stats.
+*.ipynb linguist-documentation
